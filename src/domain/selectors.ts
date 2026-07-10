@@ -3,7 +3,7 @@
 // Keeping this centralized means Dashboard/Analytics/Members never duplicate (and drift on)
 // the same "what counts as at-risk" or "what's this week's total" logic.
 
-import { daysBetween, nextAnniversary, parseISODate, toISODate } from './dateUtils';
+import { daysBetween, nextAnniversary, parseISODate, sundayOf, toISODate } from './dateUtils';
 import type { AttendanceEvent, Campaign, CampaignMetric, Group, Meeting, Member, Stage, TrackerSnapshot, Week } from './types';
 
 export function notDeleted<T extends { deletedAt: string | null }>(items: T[]): T[] {
@@ -16,6 +16,12 @@ export function weeksChrono(snapshot: TrackerSnapshot): Week[] {
   return notDeleted(snapshot.weeks)
     .slice()
     .sort((a, b) => (a.weekOf < b.weekOf ? -1 : a.weekOf > b.weekOf ? 1 : 0));
+}
+
+/** The Week row for the current (today's) Sunday-start week, if one has been created yet. */
+export function currentWeek(snapshot: TrackerSnapshot, today = new Date()): Week | undefined {
+  const iso = toISODate(sundayOf(today));
+  return notDeleted(snapshot.weeks).find((w) => w.weekOf === iso);
 }
 
 export function meetingsForWeek(snapshot: TrackerSnapshot, weekId: string): Meeting[] {

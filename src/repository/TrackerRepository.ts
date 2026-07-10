@@ -42,4 +42,11 @@ export interface TrackerRepository {
    * never be invoked implicitly — the UI calls this only on explicit opt-in.
    */
   seedDemoData?(): Promise<void>;
+
+  /**
+   * Optional bulk load for Settings' "Restore backup" (JSON) and phase 3's migration
+   * wizard. Replaces the entire local snapshot in one shot — callers are responsible
+   * for validating/previewing before calling this, it does no merging of its own.
+   */
+  restoreSnapshot?(snapshot: TrackerSnapshot): Promise<void>;
 }

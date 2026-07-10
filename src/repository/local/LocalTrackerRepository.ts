@@ -92,6 +92,13 @@ export class LocalTrackerRepository implements TrackerRepository {
     return this.loadSnapshot();
   }
 
+  async restoreSnapshot(snapshot: TrackerSnapshot): Promise<void> {
+    this.setState('saving');
+    const db = await getDB();
+    await this._writeAll(db, snapshot);
+    this.setState('saved');
+  }
+
   async seedDemoData(): Promise<void> {
     this.setState('saving');
     const db = await getDB();

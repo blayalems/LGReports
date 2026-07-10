@@ -1,0 +1,40 @@
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.top {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.name {
+  color: var(--text2);
+  font-weight: 600;
+}
+.count {
+  color: var(--text3);
+}
+.count strong {
+  color: var(--text);
+}
+.track {
+  height: 22px;
+  border-radius: 8px;
+  background: var(--stroke2);
+  overflow: hidden;
+}
+.fill {
+  height: 100%;
+  border-radius: 8px;
+  animation: fillGrow 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 8px;
+}
+.pctLabel {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #fff;
+}

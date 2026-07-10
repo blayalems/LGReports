@@ -1,0 +1,70 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 16, 13, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  z-index: 70;
+  animation: overlayIn 0.18s ease;
+  padding: clamp(0px, 3vw, 26px);
+}
+.backdrop.sheet {
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0 clamp(0px, 2vw, 20px);
+}
+.backdrop.center {
+  align-items: center;
+  justify-content: center;
+}
+.panel {
+  width: min(640px, 100%);
+  max-height: 88vh;
+  overflow-y: auto;
+  background: var(--surface3);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  border: 1px solid var(--stroke);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.35);
+  animation: popIn 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.panel.center {
+  border-radius: 28px;
+}
+.panel.sheet {
+  border-radius: 28px 28px 0 0;
+  box-shadow: 0 -14px 50px rgba(0, 0, 0, 0.28);
+}
+.grabber {
+  width: 40px;
+  height: 4px;
+  border-radius: 100px;
+  background: var(--stroke2);
+  margin: 0 auto 14px;
+}
+.header {
+  padding: 20px 22px 12px;
+  border-bottom: 1px solid var(--stroke2);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--text);
+}
+.closeBtn {
+  width: 34px;
+  height: 34px;
+  border: none;
+  background: var(--stroke2);
+  border-radius: 100px;
+  cursor: pointer;
+  color: var(--text2);
+  font-size: 15px;
+  flex: 0 0 34px;
+}

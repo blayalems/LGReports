@@ -1,0 +1,11 @@
+.track {
+  height: var(--bar-h, 9px);
+  border-radius: 100px;
+  background: var(--stroke2);
+  overflow: hidden;
+}
+.fill {
+  height: 100%;
+  border-radius: 100px;
+  animation: fillGrow 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}

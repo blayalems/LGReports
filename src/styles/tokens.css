@@ -1,0 +1,89 @@
+/* Design tokens — ported from the Claude Design prototype's light/dark palette.
+   Keep names identical to the prototype so future visual tweaks stay a one-line diff. */
+:root {
+  --accent: #0e7c6b;
+  --accent-soft: rgba(14, 124, 107, 0.13);
+  --bg: #eaf0ec;
+  --mesh1: rgba(14, 124, 107, 0.16);
+  --mesh2: rgba(222, 146, 90, 0.18);
+  --mesh3: rgba(90, 140, 222, 0.1);
+  --surface: rgba(255, 255, 255, 0.62);
+  --surface2: rgba(255, 255, 255, 0.42);
+  --surface3: rgba(255, 255, 255, 0.82);
+  --stroke: rgba(255, 255, 255, 0.75);
+  --stroke2: rgba(22, 45, 38, 0.09);
+  --text: #16211c;
+  --text2: #51605a;
+  --text3: #86938c;
+  --shadow: 0 10px 34px rgba(16, 42, 35, 0.1);
+  --shadow-sm: 0 4px 14px rgba(16, 42, 35, 0.07);
+  --input-bg: rgba(255, 255, 255, 0.72);
+  --input-stroke: rgba(22, 45, 38, 0.13);
+  --nav-bg: rgba(255, 255, 255, 0.55);
+  --good: #1e8a5f;
+  --warn: #c4763b;
+  --bad: #c0492b;
+  --font-display: 'Outfit', system-ui, sans-serif;
+  --font-body: 'Instrument Sans', system-ui, sans-serif;
+  --radius-lg: 26px;
+  --radius-md: 18px;
+  --radius-sm: 12px;
+  --radius-pill: 100px;
+  --motion-fast: 0.16s;
+  --motion-base: 0.22s;
+  --motion-slow: 0.32s;
+  --easing: cubic-bezier(0.2, 0.8, 0.2, 1);
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  --accent-soft: rgba(46, 196, 168, 0.14);
+  --bg: #0c1512;
+  --mesh1: rgba(24, 150, 126, 0.2);
+  --mesh2: rgba(200, 120, 70, 0.13);
+  --mesh3: rgba(80, 120, 200, 0.1);
+  --surface: rgba(22, 34, 29, 0.6);
+  --surface2: rgba(22, 34, 29, 0.42);
+  --surface3: rgba(30, 44, 38, 0.85);
+  --stroke: rgba(255, 255, 255, 0.1);
+  --stroke2: rgba(255, 255, 255, 0.08);
+  --text: #e8efea;
+  --text2: #a3b2aa;
+  --text3: #6f7e76;
+  --shadow: 0 12px 38px rgba(0, 0, 0, 0.38);
+  --shadow-sm: 0 4px 14px rgba(0, 0, 0, 0.28);
+  --input-bg: rgba(12, 20, 17, 0.55);
+  --input-stroke: rgba(255, 255, 255, 0.13);
+  --nav-bg: rgba(16, 26, 22, 0.62);
+  --good: #3dbb86;
+  --warn: #e09a5c;
+  --bad: #e06a4c;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']):not([data-theme='dark']) {
+    --accent-soft: rgba(46, 196, 168, 0.14);
+    --bg: #0c1512;
+    --mesh1: rgba(24, 150, 126, 0.2);
+    --mesh2: rgba(200, 120, 70, 0.13);
+    --mesh3: rgba(80, 120, 200, 0.1);
+    --surface: rgba(22, 34, 29, 0.6);
+    --surface2: rgba(22, 34, 29, 0.42);
+    --surface3: rgba(30, 44, 38, 0.85);
+    --stroke: rgba(255, 255, 255, 0.1);
+    --stroke2: rgba(255, 255, 255, 0.08);
+    --text: #e8efea;
+    --text2: #a3b2aa;
+    --text3: #6f7e76;
+    --shadow: 0 12px 38px rgba(0, 0, 0, 0.38);
+    --shadow-sm: 0 4px 14px rgba(0, 0, 0, 0.28);
+    --input-bg: rgba(12, 20, 17, 0.55);
+    --input-stroke: rgba(255, 255, 255, 0.13);
+    --nav-bg: rgba(16, 26, 22, 0.62);
+    --good: #3dbb86;
+    --warn: #e09a5c;
+    --bad: #e06a4c;
+    color-scheme: dark;
+  }
+}

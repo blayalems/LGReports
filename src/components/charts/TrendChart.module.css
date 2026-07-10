@@ -1,0 +1,71 @@
+.wrap {
+  position: relative;
+  height: var(--chart-h, 180px);
+  padding-top: 6px;
+}
+.bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 11px;
+  height: 100%;
+}
+.col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  min-width: 0;
+  height: 100%;
+  position: relative;
+}
+.value {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--text);
+}
+.bar {
+  width: 100%;
+  max-width: 34px;
+  border-radius: 9px 9px 4px 4px;
+  animation: barGrow 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  transform-origin: bottom;
+}
+.label {
+  font-size: 10.5px;
+  color: var(--text3);
+  white-space: nowrap;
+}
+.avgLine {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 2px dashed var(--text2);
+  opacity: 0.75;
+}
+.legend {
+  display: flex;
+  gap: 16px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text3);
+}
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.swatchBar {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--accent);
+}
+.swatchLine {
+  width: 12px;
+  height: 0;
+  border-top: 2px dashed var(--text2);
+}

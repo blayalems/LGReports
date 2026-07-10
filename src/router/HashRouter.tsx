@@ -12,6 +12,36 @@ function currentPath(): string {
   return hash || '/';
 }
 
+/**
+ * Matches a path against NAV_ITEMS, allowing one level of trailing params for
+ * non-root routes (e.g. "/report/<weekId>" still matches the "/report" nav item,
+ * with ["<weekId>"] as params) — used by History's "Open week" deep link into Report.
+ */
+export function matchRoute(path: string) {
+  for (const item of NAV_ITEMS) {
+    if (item.path === '/') {
+      if (path === '/') return { item, params: [] as string[] };
+      continue;
+    }
+    if (path === item.path) return { item, params: [] as string[] };
+    if (path.startsWith(item.path + '/')) {
+      return {
+        item,
+        params: path
+          .slice(item.path.length + 1)
+          .split('/')
+          .filter(Boolean),
+      };
+    }
+  }
+  return null;
+}
+
+export function useRouteParams(): string[] {
+  const { path } = useRouter();
+  return matchRoute(path)?.params ?? [];
+}
+
 interface RouterContextValue {
   path: string;
   navigate: (path: string) => void;
@@ -34,8 +64,7 @@ export function HashRouterProvider({ children }: { children: ReactNode }) {
       isFirstRender.current = false;
       return;
     }
-    const item = NAV_ITEMS.find((n) => n.path === path);
-    const label = item?.label ?? 'Page';
+    const label = matchRoute(path)?.item.label ?? 'Page';
     document.title = `${label} — Life Group Tracker`;
     announce(`${label} loaded`, 'polite');
     const main = document.getElementById('main-content');

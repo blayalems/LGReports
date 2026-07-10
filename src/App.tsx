@@ -1,6 +1,6 @@
 import { AppShell } from './components/layout/AppShell';
 import { FirstRun } from './components/layout/FirstRun';
-import { useRouter } from './router/HashRouter';
+import { matchRoute, useRouter } from './router/HashRouter';
 import { useTracker } from './state/StoreContext';
 
 // Placeholder while each screen is built out — swapped for the real route
@@ -14,15 +14,20 @@ function ComingSoon({ label }: { label: string }) {
   );
 }
 
-const ROUTE_COMPONENTS: Record<string, () => React.ReactElement> = {
-  '/': () => <ComingSoon label="Home" />,
-  '/report': () => <ComingSoon label="Weekly Report" />,
-  '/members': () => <ComingSoon label="Members" />,
-  '/campaign': () => <ComingSoon label="Campaign" />,
-  '/events': () => <ComingSoon label="Events & Goals" />,
-  '/analytics': () => <ComingSoon label="Analytics" />,
-  '/history': () => <ComingSoon label="History" />,
-  '/settings': () => <ComingSoon label="Settings" />,
+export interface RouteComponentProps {
+  /** Trailing path segments after the base route, e.g. ["<weekId>"] for "/report/<weekId>". */
+  params: string[];
+}
+
+const ROUTE_COMPONENTS: Record<string, (props: RouteComponentProps) => React.ReactElement> = {
+  dashboard: () => <ComingSoon label="Home" />,
+  report: () => <ComingSoon label="Weekly Report" />,
+  members: () => <ComingSoon label="Members" />,
+  campaign: () => <ComingSoon label="Campaign" />,
+  events: () => <ComingSoon label="Events & Goals" />,
+  analytics: () => <ComingSoon label="Analytics" />,
+  history: () => <ComingSoon label="History" />,
+  settings: () => <ComingSoon label="Settings" />,
 };
 
 function App() {
@@ -37,11 +42,12 @@ function App() {
     return <FirstRun />;
   }
 
-  const Route = ROUTE_COMPONENTS[path] ?? ROUTE_COMPONENTS['/'];
+  const matched = matchRoute(path);
+  const Route = ROUTE_COMPONENTS[matched?.item.key ?? 'dashboard'] ?? ROUTE_COMPONENTS.dashboard;
 
   return (
     <AppShell>
-      <Route />
+      <Route params={matched?.params ?? []} />
     </AppShell>
   );
 }

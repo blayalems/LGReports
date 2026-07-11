@@ -1,6 +1,10 @@
 import { AppShell } from './components/layout/AppShell';
 import { FirstRun } from './components/layout/FirstRun';
 import { matchRoute, useRouter } from './router/HashRouter';
+import CampaignPage from './routes/campaign/CampaignPage';
+import DashboardPage from './routes/dashboard/DashboardPage';
+import MembersPage from './routes/members/MembersPage';
+import ReportPage from './routes/report/ReportPage';
 import { useTracker } from './state/StoreContext';
 
 // Placeholder while each screen is built out — swapped for the real route
@@ -20,10 +24,10 @@ export interface RouteComponentProps {
 }
 
 const ROUTE_COMPONENTS: Record<string, (props: RouteComponentProps) => React.ReactElement> = {
-  dashboard: () => <ComingSoon label="Home" />,
-  report: () => <ComingSoon label="Weekly Report" />,
-  members: () => <ComingSoon label="Members" />,
-  campaign: () => <ComingSoon label="Campaign" />,
+  dashboard: () => <DashboardPage />,
+  report: (props) => <ReportPage params={props.params} />,
+  members: () => <MembersPage />,
+  campaign: () => <CampaignPage />,
   events: () => <ComingSoon label="Events & Goals" />,
   analytics: () => <ComingSoon label="Analytics" />,
   history: () => <ComingSoon label="History" />,

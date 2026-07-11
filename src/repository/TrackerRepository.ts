@@ -12,6 +12,12 @@ export interface ConnectResult {
  * backend — so swapping the backend in phase 2 touches no UI code.
  */
 export interface TrackerRepository {
+  /**
+   * True for backends that live off-device (Google Sheets). Drives the UI's
+   * focus/interval re-fetch loop and the sign-in gate; local backends omit it.
+   */
+  readonly isRemote?: boolean;
+
   /** Current sync state, observable so the UI can render Disconnected/Loading/Saving/etc. */
   getSyncState(): SyncState;
   onSyncStateChange(listener: (state: SyncState) => void): () => void;

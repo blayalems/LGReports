@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { AppShell } from './components/layout/AppShell';
 import { FirstRun } from './components/layout/FirstRun';
+import { SignInGate } from './components/layout/SignInGate';
 import { matchRoute, useRouter } from './router/HashRouter';
 import AnalyticsPage from './routes/analytics/AnalyticsPage';
 import CampaignPage from './routes/campaign/CampaignPage';
@@ -45,9 +46,13 @@ function useAppliedTheme(theme: 'light' | 'dark' | 'auto' | undefined, accent: s
 }
 
 function App() {
-  const { snapshot, isFirstRun } = useTracker();
+  const { snapshot, isFirstRun, repository, syncState } = useTracker();
   const { path } = useRouter();
   useAppliedTheme(snapshot?.config.theme, snapshot?.config.accent);
+
+  if (!snapshot && repository.isRemote && (syncState === 'disconnected' || syncState === 'error')) {
+    return <SignInGate />;
+  }
 
   if (!snapshot) {
     return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: 'var(--text2)' }}>Loading…</div>;

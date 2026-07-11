@@ -1,6 +1,6 @@
 import { useEffect, useState, type ChangeEvent } from 'react';
 import { Card } from '../../components/ui/Card';
-import { SyncStatusChip } from '../../components/ui/SyncStatusChip';
+import { SheetsSyncCard } from './SheetsSyncCard';
 import { nowISO, todayISO } from '../../domain/dateUtils';
 import { createEmptySnapshot } from '../../domain/demoData';
 import { newId } from '../../domain/ids';
@@ -60,7 +60,7 @@ function LogoPreview({ logoMediaId }: { logoMediaId: string }) {
 }
 
 export default function SettingsPage() {
-  const { snapshot, dispatch, mediaRepository, repository, refresh, syncState, actorId } = useTracker();
+  const { snapshot, dispatch, mediaRepository, repository, refresh, actorId } = useTracker();
   if (!snapshot) return null;
 
   const config = snapshot.config;
@@ -355,31 +355,30 @@ export default function SettingsPage() {
             </label>
           </Card>
 
-          <Card>
-            <h2 className={styles.cardTitle}>Data &amp; sync</h2>
-            <div className={styles.syncRow}>
-              <SyncStatusChip state={syncState} />
-              <p className={styles.cardHint} style={{ margin: 0, flex: 1, minWidth: 220 }}>
-                Your data is saved on this device (in this browser). Shared Google Sheets sync for the whole leadership team is coming in the next
-                phase — until then, use backups to move data between devices.
-              </p>
-            </div>
-          </Card>
+          <SheetsSyncCard />
 
           <Card>
             <h2 className={styles.cardTitle}>Backup &amp; data</h2>
-            <p className={styles.cardHint}>Download a backup regularly — restore it on any device.</p>
+            <p className={styles.cardHint}>
+              {repository.restoreSnapshot
+                ? 'Download a backup regularly — restore it on any device.'
+                : 'Download a backup any time. Restore and reset are managed from the shared workbook itself (ask the overseer) rather than per device.'}
+            </p>
             <div className={styles.dangerRow}>
               <button type="button" className={`pressable ${styles.primaryBtn}`} onClick={downloadBackup}>
                 Download backup
               </button>
-              <label className={`pressable ${styles.ghostBtn}`}>
-                <input type="file" accept=".json,application/json" onChange={(e) => void restoreBackup(e)} style={{ display: 'none' }} />
-                Restore backup
-              </label>
-              <button type="button" className={styles.dangerBtn} onClick={() => void resetAll()}>
-                Reset everything
-              </button>
+              {repository.restoreSnapshot && (
+                <>
+                  <label className={`pressable ${styles.ghostBtn}`}>
+                    <input type="file" accept=".json,application/json" onChange={(e) => void restoreBackup(e)} style={{ display: 'none' }} />
+                    Restore backup
+                  </label>
+                  <button type="button" className={styles.dangerBtn} onClick={() => void resetAll()}>
+                    Reset everything
+                  </button>
+                </>
+              )}
             </div>
           </Card>
         </div>

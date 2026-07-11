@@ -49,9 +49,15 @@ export function StoreProvider({
 
   useEffect(() => {
     let cancelled = false;
-    repository.loadSnapshot().then((snap) => {
-      if (!cancelled) setSnapshot(snap);
-    });
+    repository
+      .loadSnapshot()
+      .then((snap) => {
+        if (!cancelled) setSnapshot(snap);
+      })
+      .catch(() => {
+        // Remote backend without a live session: snapshot stays null and the
+        // repository reports 'disconnected'/'error' — App renders the sign-in gate.
+      });
     return () => {
       cancelled = true;
     };
@@ -61,6 +67,23 @@ export function StoreProvider({
     const snap = await repository.refresh();
     setSnapshot(snap);
   }, [repository]);
+
+  // Remote source of truth: re-fetch when the tab regains focus and every 60s while
+  // visible, so one leader's edits show up on another leader's open screen.
+  useEffect(() => {
+    if (!repository.isRemote) return;
+    const tryRefresh = () => {
+      if (document.visibilityState === 'visible') refresh().catch(() => undefined);
+    };
+    const interval = setInterval(tryRefresh, 60_000);
+    document.addEventListener('visibilitychange', tryRefresh);
+    window.addEventListener('focus', tryRefresh);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', tryRefresh);
+      window.removeEventListener('focus', tryRefresh);
+    };
+  }, [repository, refresh]);
 
   const dispatch = useCallback(
     (partial: PendingCommand) => {

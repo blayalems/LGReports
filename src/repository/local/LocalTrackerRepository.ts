@@ -24,8 +24,10 @@ const REVISIONED_STORE_BY_ENTITY: Partial<Record<EntityType, RevisionedStoreName
   event: 'events',
 };
 
-async function putAll<T>(db: IDBPDatabase<LocalSchema>, store: StoreNames<LocalSchema>, items: T[]) {
+/** Replace a store's full contents. _writeAll callers (seed/restore/reset) mean "this snapshot and nothing else" — merging old rows in would resurrect deleted data. */
+async function replaceAll<T>(db: IDBPDatabase<LocalSchema>, store: StoreNames<LocalSchema>, items: T[]) {
   const tx = db.transaction(store, 'readwrite');
+  await tx.store.clear();
   await Promise.all([...items.map((item) => tx.store.put(item as never)), tx.done]);
 }
 
@@ -214,20 +216,20 @@ export class LocalTrackerRepository implements TrackerRepository {
   }
 
   private async _writeAll(db: IDBPDatabase<LocalSchema>, snap: TrackerSnapshot) {
-    await putAll(db, 'meta', [snap.meta]);
-    await putAll(db, 'config', [snap.config]);
-    await putAll(db, 'stages', snap.stages);
-    await putAll(db, 'groups', snap.groups);
-    await putAll(db, 'members', snap.members);
-    await putAll(db, 'memberMilestones', snap.memberMilestones);
-    await putAll(db, 'weeks', snap.weeks);
-    await putAll(db, 'meetings', snap.meetings);
-    await putAll(db, 'attendanceEvents', snap.attendanceEvents);
-    await putAll(db, 'campaigns', snap.campaigns);
-    await putAll(db, 'campaignMetrics', snap.campaignMetrics);
-    await putAll(db, 'rivals', snap.rivals);
-    await putAll(db, 'events', snap.events);
-    await putAll(db, 'media', snap.media);
-    await putAll(db, 'audit', snap.audit);
+    await replaceAll(db, 'meta', [snap.meta]);
+    await replaceAll(db, 'config', [snap.config]);
+    await replaceAll(db, 'stages', snap.stages);
+    await replaceAll(db, 'groups', snap.groups);
+    await replaceAll(db, 'members', snap.members);
+    await replaceAll(db, 'memberMilestones', snap.memberMilestones);
+    await replaceAll(db, 'weeks', snap.weeks);
+    await replaceAll(db, 'meetings', snap.meetings);
+    await replaceAll(db, 'attendanceEvents', snap.attendanceEvents);
+    await replaceAll(db, 'campaigns', snap.campaigns);
+    await replaceAll(db, 'campaignMetrics', snap.campaignMetrics);
+    await replaceAll(db, 'rivals', snap.rivals);
+    await replaceAll(db, 'events', snap.events);
+    await replaceAll(db, 'media', snap.media);
+    await replaceAll(db, 'audit', snap.audit);
   }
 }

@@ -103,10 +103,13 @@ test('first run, core workflows, routes, and responsive layout', async ({ page }
 
   await page.goto('./#/events');
   await page.getByRole('button', { name: /add event/i }).click();
-  const eventName = page.getByPlaceholder('Event name').first();
+  const eventName = page.locator('input[placeholder="Event name"]:focus');
+  await expect(eventName).toBeFocused();
   await eventName.fill('Browser Test Gathering');
   await eventName.blur();
-  await expect(eventName).toHaveValue('Browser Test Gathering');
+  await expect
+    .poll(() => page.getByPlaceholder('Event name').evaluateAll((inputs) => inputs.map((input) => (input as HTMLInputElement).value)))
+    .toContain('Browser Test Gathering');
 
   await page.goto('./#/settings');
   await page.getByRole('button', { name: 'Dark' }).click();

@@ -1,5 +1,6 @@
-import { useEffect, useState, type ChangeEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { Dialog } from '../../components/ui/Dialog';
+import { DraftNumberInput } from '../../components/ui/DraftNumberInput';
 import { nowISO, todayISO } from '../../domain/dateUtils';
 import { newId } from '../../domain/ids';
 import { avatarColor, initials, notDeleted } from '../../domain/selectors';
@@ -51,6 +52,13 @@ export function MemberPhotoAvatar({ member, size = 44, className }: { member: Me
 
 export function MemberDialog({ member, onClose }: { member: Member; onClose: () => void }) {
   const { snapshot, dispatch, mediaRepository, actorId } = useTracker();
+  const latestRevision = useRef(member.revision);
+  const editQueue = useRef<Promise<void>>(Promise.resolve());
+
+  useEffect(() => {
+    latestRevision.current = Math.max(latestRevision.current, member.revision);
+  }, [member.revision]);
+
   if (!snapshot) return null;
 
   const groups = notDeleted(snapshot.groups);
@@ -58,7 +66,13 @@ export function MemberDialog({ member, onClose }: { member: Member; onClose: () 
   const milestones = notDeleted(snapshot.memberMilestones).filter((ms) => ms.memberId === member.id);
 
   const update = (payload: Partial<Member>) => {
-    void dispatch({ entity: { type: 'member', id: member.id }, op: 'update', payload, baseRevision: member.revision });
+    const run = async () => {
+      const baseRevision = latestRevision.current;
+      await dispatch({ entity: { type: 'member', id: member.id }, op: 'update', payload, baseRevision });
+      latestRevision.current = baseRevision + 1;
+    };
+    const next = editQueue.current.then(run, run);
+    editQueue.current = next.catch(() => undefined);
   };
 
   const onPhotoPick = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -176,9 +190,10 @@ export function MemberDialog({ member, onClose }: { member: Member; onClose: () 
             Birthday (month &amp; day)
           </span>
           <div className={styles.birthdayPair}>
-            <label>
+            <label htmlFor={`member-${member.id}-birthday-month`}>
               <span className="visually-hidden">Birthday month</span>
               <select
+                id={`member-${member.id}-birthday-month`}
                 className={styles.fieldInput}
                 value={member.birthdayMonth ?? ''}
                 onChange={(e) => update({ birthdayMonth: e.target.value ? Number(e.target.value) : null })}
@@ -191,16 +206,16 @@ export function MemberDialog({ member, onClose }: { member: Member; onClose: () 
                 ))}
               </select>
             </label>
-            <label>
+            <label htmlFor={`member-${member.id}-birthday-day`}>
               <span className="visually-hidden">Birthday day</span>
-              <input
-                type="number"
+              <DraftNumberInput
+                id={`member-${member.id}-birthday-day`}
                 min={1}
                 max={31}
                 className={styles.fieldInput}
-                value={member.birthdayDay ?? ''}
+                value={member.birthdayDay}
                 placeholder="Day"
-                onChange={(e) => update({ birthdayDay: e.target.value ? Number(e.target.value) : null })}
+                onCommit={(value) => update({ birthdayDay: value })}
               />
             </label>
           </div>
@@ -216,7 +231,31 @@ export function MemberDialog({ member, onClose }: { member: Member; onClose: () 
             ))}
           </select>
         </label>
+        <label>
+          <span className={styles.fieldLabel}>Address</span>
+          <input
+            className={styles.fieldInput}
+            defaultValue={member.address ?? ''}
+            placeholder="Street, barangay…"
+            onBlur={(e) => {
+              if (e.target.value !== (member.address ?? '')) update({ address: e.target.value });
+            }}
+          />
+        </label>
       </div>
+
+      <label className={styles.notesField}>
+        <span className={styles.fieldLabel}>Notes &amp; prayer requests</span>
+        <textarea
+          className={`${styles.fieldInput} ${styles.notesInput}`}
+          rows={3}
+          defaultValue={member.notes ?? ''}
+          placeholder="Prayer requests, follow-up notes…"
+          onBlur={(e) => {
+            if (e.target.value !== (member.notes ?? '')) update({ notes: e.target.value });
+          }}
+        />
+      </label>
 
       <span className={styles.fieldLabel}>Journey milestones</span>
       <div className={styles.milestones}>

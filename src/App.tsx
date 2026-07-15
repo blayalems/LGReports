@@ -55,7 +55,7 @@ function App() {
   }
 
   if (!snapshot) {
-    return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: 'var(--text2)' }}>Loading…</div>;
+    return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100dvh', color: 'var(--text2)' }}>Loading…</div>;
   }
 
   if (isFirstRun) {

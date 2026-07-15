@@ -22,6 +22,7 @@ describe('CampaignPage', () => {
     await screen.findByText('Milestone goals');
     const actualInputs = screen.getAllByLabelText('Actual');
     fireEvent.change(actualInputs[0], { target: { value: '25' } });
+    fireEvent.blur(actualInputs[0]);
     await waitFor(async () => {
       const snap = await repository.refresh();
       const vipMetric = snap.campaignMetrics.find((m) => m.metricKey === 'vip');

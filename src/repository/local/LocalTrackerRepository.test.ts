@@ -114,4 +114,59 @@ describe('LocalTrackerRepository', () => {
     // Sanity: none of the launch-blocker real names leaked into the fixture.
     expect(snap.members.some((m) => /lemuel|lloyd|victor|arnie/i.test(m.name))).toBe(false);
   });
+
+  it('rejects a malformed backup before replacing any existing data', async () => {
+    const repo = new LocalTrackerRepository('actor-1');
+    await repo.loadSnapshot();
+    await repo.seedDemoData!();
+    const before = await repo.refresh();
+    const malformed = structuredClone(before);
+
+    malformed.config.church = 'This must not be persisted';
+    malformed.groups = [];
+    delete (malformed.members[0] as Partial<(typeof malformed.members)[number]>).phone;
+
+    await expect(repo.restoreSnapshot(malformed)).rejects.toThrow('Invalid tracker backup');
+    expect(await repo.refresh()).toEqual(before);
+  });
+
+  it('normalizes legacy backups without member address and notes fields', async () => {
+    const repo = new LocalTrackerRepository('actor-1');
+    await repo.loadSnapshot();
+    await repo.seedDemoData!();
+    const legacy = structuredClone(await repo.refresh());
+
+    for (const member of legacy.members) {
+      delete (member as Partial<typeof member>).address;
+      delete (member as Partial<typeof member>).notes;
+    }
+
+    await expect(repo.restoreSnapshot(legacy)).resolves.toBeUndefined();
+    const restored = await repo.refresh();
+    expect(restored.members.every((member) => member.address === '' && member.notes === '')).toBe(true);
+  });
+
+  it('rolls back every snapshot store when an IndexedDB write fails', async () => {
+    const repo = new LocalTrackerRepository('actor-1');
+    await repo.loadSnapshot();
+    await repo.seedDemoData!();
+    const before = await repo.refresh();
+    const replacement = structuredClone(before);
+
+    replacement.config.church = 'This must roll back';
+    replacement.groups = [];
+    replacement.audit.push({
+      id: 'uncloneable-audit',
+      actorId: 'actor-1',
+      action: 'restore',
+      entityType: 'snapshot',
+      entityId: replacement.meta.trackerId,
+      timestamp: new Date().toISOString(),
+      summary: 'Force a structured-clone failure',
+      callback: () => undefined,
+    } as unknown as (typeof replacement.audit)[number]);
+
+    await expect(repo.restoreSnapshot(replacement)).rejects.toThrow();
+    expect(await repo.refresh()).toEqual(before);
+  });
 });

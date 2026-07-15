@@ -64,6 +64,15 @@
   grid-template-columns: 1fr 78px;
   gap: 8px;
 }
+.notesField {
+  display: block;
+  margin-bottom: 14px;
+}
+.notesInput {
+  min-height: 82px;
+  resize: vertical;
+  line-height: 1.45;
+}
 
 .segment {
   display: flex;

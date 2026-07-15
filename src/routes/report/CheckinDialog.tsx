@@ -60,6 +60,8 @@ export function CheckinDialog({ meeting, onClose }: { meeting: Meeting; onClose:
         status: 'regular',
         groupId: meeting.groupId,
         phone: '',
+        address: '',
+        notes: '',
         birthdayMonth: null,
         birthdayDay: null,
         photoMediaId: null,

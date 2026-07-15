@@ -68,6 +68,9 @@ export interface Member extends Revisioned {
   status: MemberStatus;
   groupId: ID | null;
   phone: string;
+  address: string;
+  /** Private care notes, including prayer requests and follow-up context. */
+  notes: string;
   /** Month/day only, no year — privacy minimization default (see rebuild spec). */
   birthdayMonth: number | null;
   birthdayDay: number | null;

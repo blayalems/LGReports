@@ -28,6 +28,25 @@ interface StoreContextValue {
 
 const StoreContext = createContext<StoreContextValue | null>(null);
 
+function currentRevision(snapshot: TrackerSnapshot | null, type: EntityType, id: string): number | undefined {
+  if (!snapshot) return undefined;
+  if (type === 'config') return snapshot.config.id === id ? snapshot.config.revision : undefined;
+
+  const collections: Partial<Record<EntityType, readonly { id: string; revision: number }[]>> = {
+    stage: snapshot.stages,
+    group: snapshot.groups,
+    member: snapshot.members,
+    memberMilestone: snapshot.memberMilestones,
+    week: snapshot.weeks,
+    meeting: snapshot.meetings,
+    campaign: snapshot.campaigns,
+    campaignMetric: snapshot.campaignMetrics,
+    rival: snapshot.rivals,
+    event: snapshot.events,
+  };
+  return collections[type]?.find((row) => row.id === id)?.revision;
+}
+
 export function StoreProvider({
   repository,
   mediaRepository,
@@ -43,6 +62,7 @@ export function StoreProvider({
   const [syncState, setSyncState] = useState<SyncState>(repository.getSyncState());
   const [dismissedFirstRun, setDismissedFirstRun] = useState(false);
   const queueRef = useRef<Promise<unknown>>(Promise.resolve());
+  const snapshotRef = useRef<TrackerSnapshot | null>(null);
   const announce = useAnnounce();
 
   useEffect(() => repository.onSyncStateChange(setSyncState), [repository]);
@@ -52,7 +72,10 @@ export function StoreProvider({
     repository
       .loadSnapshot()
       .then((snap) => {
-        if (!cancelled) setSnapshot(snap);
+        if (!cancelled) {
+          snapshotRef.current = snap;
+          setSnapshot(snap);
+        }
       })
       .catch(() => {
         // Remote backend without a live session: snapshot stays null and the
@@ -65,6 +88,7 @@ export function StoreProvider({
 
   const refresh = useCallback(async () => {
     const snap = await repository.refresh();
+    snapshotRef.current = snap;
     setSnapshot(snap);
   }, [repository]);
 
@@ -88,11 +112,17 @@ export function StoreProvider({
   const dispatch = useCallback(
     (partial: PendingCommand) => {
       const run = async () => {
+        const latestRevision = currentRevision(snapshotRef.current, partial.entity.type, partial.entity.id);
+        const baseRevision =
+          partial.baseRevision !== undefined && latestRevision !== undefined && latestRevision > partial.baseRevision
+            ? latestRevision
+            : partial.baseRevision;
         const command: DomainCommand = {
           commandId: newId(),
           actorId,
           timestamp: nowISO(),
           ...partial,
+          baseRevision,
         };
         try {
           await repository.saveCommand(command);

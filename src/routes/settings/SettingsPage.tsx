@@ -1,11 +1,13 @@
 import { useEffect, useState, type ChangeEvent } from 'react';
 import { Card } from '../../components/ui/Card';
+import { DraftNumberInput } from '../../components/ui/DraftNumberInput';
 import { SheetsSyncCard } from './SheetsSyncCard';
 import { nowISO, todayISO } from '../../domain/dateUtils';
 import { createEmptySnapshot } from '../../domain/demoData';
 import { newId } from '../../domain/ids';
 import { notDeleted } from '../../domain/selectors';
-import type { Config, TrackerSnapshot } from '../../domain/types';
+import { isTrackerSnapshot } from '../../domain/snapshotValidation';
+import type { Config } from '../../domain/types';
 import { showToast } from '../../hooks/useToast';
 import { downloadBlob } from '../../lib/xlsx/writer';
 import { useTracker } from '../../state/StoreContext';
@@ -25,19 +27,6 @@ const THEMES: { value: Config['theme']; label: string }[] = [
   { value: 'dark', label: 'Dark' },
   { value: 'auto', label: 'Auto' },
 ];
-
-function isSnapshotShaped(x: unknown): x is TrackerSnapshot {
-  if (!x || typeof x !== 'object') return false;
-  const s = x as Record<string, unknown>;
-  return (
-    typeof s.meta === 'object' &&
-    typeof s.config === 'object' &&
-    Array.isArray(s.weeks) &&
-    Array.isArray(s.members) &&
-    Array.isArray(s.groups) &&
-    Array.isArray(s.stages)
-  );
-}
 
 function LogoPreview({ logoMediaId }: { logoMediaId: string }) {
   const { mediaRepository } = useTracker();
@@ -98,7 +87,7 @@ export default function SettingsPage() {
     if (!file || !repository.restoreSnapshot) return;
     try {
       const parsed: unknown = JSON.parse(await file.text());
-      if (!isSnapshotShaped(parsed)) {
+      if (!isTrackerSnapshot(parsed)) {
         showToast("That file doesn't look like a tracker backup", 'error');
         return;
       }
@@ -216,17 +205,17 @@ export default function SettingsPage() {
                   ))}
                 </div>
               </div>
-              <label>
+              <label htmlFor="settings-at-risk-weeks">
                 <span className={styles.fieldLabel} style={{ marginBottom: 8, display: 'block' }}>
                   At-risk after missed weeks
                 </span>
-                <input
-                  type="number"
+                <DraftNumberInput
+                  id="settings-at-risk-weeks"
                   min={1}
                   max={12}
                   className={styles.numInput}
                   value={config.atRiskWeeks}
-                  onChange={(e) => updateConfig({ atRiskWeeks: Math.min(12, Math.max(1, Number(e.target.value) || 1)) })}
+                  onCommit={(value) => updateConfig({ atRiskWeeks: value ?? 1 })}
                 />
               </label>
             </div>

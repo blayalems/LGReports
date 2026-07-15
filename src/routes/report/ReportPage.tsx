@@ -23,6 +23,11 @@ function rowsFor(snapshot: TrackerSnapshot, meetings: Meeting[]): ReportRow[] {
   }));
 }
 
+function submittedByLabel(actorId: string | null): string {
+  if (!actorId) return '';
+  return actorId.startsWith('local-') ? 'this device' : actorId;
+}
+
 export default function ReportPage({ params }: { params: string[] }) {
   const { snapshot, dispatch, refresh, syncState, actorId } = useTracker();
   const [selectedId, setSelectedId] = useState<string | null>(params[0] ?? null);
@@ -196,7 +201,7 @@ export default function ReportPage({ params }: { params: string[] }) {
               <SyncStatusChip state={syncState} />
               {week?.status === 'submitted' && (
                 <span className={styles.submittedNote}>
-                  Submitted {week.submittedAt ? formatDate(week.submittedAt.slice(0, 10)) : ''} by {week.submittedBy || 'unknown'}
+                  Submitted {week.submittedAt ? formatDate(week.submittedAt.slice(0, 10)) : ''} by {submittedByLabel(week.submittedBy) || 'unknown'}
                 </span>
               )}
               {week?.status === 'reopened' && <span className={styles.submittedNote}>Reopened for edits</span>}
@@ -299,7 +304,7 @@ export default function ReportPage({ params }: { params: string[] }) {
             <div>
               <span className={styles.fieldLabel}>Submitted</span>
               <div className={styles.fieldValue}>
-                {week.submittedAt ? `${formatDate(week.submittedAt.slice(0, 10))} · ${week.submittedBy || ''}` : 'Not yet submitted'}
+                {week.submittedAt ? `${formatDate(week.submittedAt.slice(0, 10))} · ${submittedByLabel(week.submittedBy)}` : 'Not yet submitted'}
               </div>
             </div>
           </div>

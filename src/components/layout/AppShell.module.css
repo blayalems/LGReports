@@ -36,14 +36,14 @@
 }
 .layout {
   display: flex;
-  min-height: 100vh;
+  min-height: 100dvh;
   position: relative;
   z-index: 1;
 }
 .main {
   flex: 1;
   min-width: 0;
-  max-height: 100vh;
+  max-height: 100dvh;
   overflow-y: auto;
   padding-bottom: 96px;
 }

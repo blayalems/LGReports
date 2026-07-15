@@ -35,6 +35,45 @@ describe('MembersPage', () => {
     expect(within(dialog).getByDisplayValue('Casey Morgan')).toBeInTheDocument();
   });
 
+  it('creates member details and persists address and prayer-request notes', async () => {
+    const user = userEvent.setup();
+    const { repository } = await renderWithProviders(<MembersPage />);
+    await user.click(await screen.findByRole('button', { name: /casey morgan/i }));
+    const dialog = await screen.findByRole('dialog', { name: /casey morgan/i });
+
+    const address = within(dialog).getByRole('textbox', { name: 'Address' });
+    await user.type(address, '12 Sample Street');
+    await user.tab();
+    await waitFor(async () => {
+      const snapshot = await repository.refresh();
+      expect(snapshot.members.find((member) => member.name === 'Casey Morgan')?.address).toBe('12 Sample Street');
+    });
+
+    await user.click(within(dialog).getByRole('button', { name: 'Done' }));
+    await user.click(await screen.findByRole('button', { name: /casey morgan/i }));
+    const refreshedDialog = await screen.findByRole('dialog', { name: /casey morgan/i });
+    const notes = within(refreshedDialog).getByRole('textbox', { name: /notes & prayer requests/i });
+    await user.type(notes, 'Pray for a new job');
+    await user.tab();
+    await waitFor(async () => {
+      const snapshot = await repository.refresh();
+      expect(snapshot.members.find((member) => member.name === 'Casey Morgan')?.notes).toBe('Pray for a new job');
+    });
+  });
+
+  it('initializes new members with empty address and notes', async () => {
+    const user = userEvent.setup();
+    const { repository } = await renderWithProviders(<MembersPage />);
+    await user.click(await screen.findByRole('button', { name: /add member/i }));
+    await screen.findByRole('dialog', { name: /new member/i });
+
+    await waitFor(async () => {
+      const snapshot = await repository.refresh();
+      const created = snapshot.members.find((member) => member.name === '');
+      expect(created).toMatchObject({ address: '', notes: '' });
+    });
+  });
+
   it('status filter chips narrow the grid', async () => {
     const user = userEvent.setup();
     await renderWithProviders(<MembersPage />);

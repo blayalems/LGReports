@@ -73,6 +73,10 @@ export const TAB_SPECS = {
     f('birthdayDay', 'numberOrNull'),
     f('photoMediaId', 'stringOrNull'),
     ...REVISIONED,
+    // Append-only wire contract: these follow all v1 member columns so existing
+    // shared workbooks keep revision metadata at its original positions.
+    f('address'),
+    f('notes'),
   ],
   memberMilestones: [f('id'), f('memberId'), f('stageKey'), f('completedOn', 'stringOrNull'), ...REVISIONED],
   weeks: [
@@ -227,7 +231,10 @@ export function parseTab<T>(tab: TabName, rows: (string | undefined)[][] | undef
 export function headersMatch(tab: TabName, headerRow: (string | undefined)[] | undefined): boolean {
   const expected = headersFor(tab);
   if (!headerRow) return false;
-  return expected.every((h, i) => (headerRow[i] ?? '').trim() === h);
+  const legacyMemberColumnCount = expected.length - 2;
+  const requiredCount = tab === 'members' ? legacyMemberColumnCount : expected.length;
+  if (headerRow.length < requiredCount) return false;
+  return expected.slice(0, Math.min(expected.length, headerRow.length)).every((h, i) => (headerRow[i] ?? '').trim() === h);
 }
 
 export interface ParsedWorkbook {

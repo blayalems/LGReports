@@ -21,7 +21,9 @@ describe('EventsPage', () => {
   it("editing an event's actual attendance updates its progress bar", async () => {
     const { repository } = await renderWithProviders(<EventsPage />);
     await screen.findByDisplayValue('Sample Retreat');
-    fireEvent.change(screen.getByLabelText('Actual attendance'), { target: { value: '30' } });
+    const actualInput = screen.getByLabelText('Actual attendance');
+    fireEvent.change(actualInput, { target: { value: '30' } });
+    fireEvent.blur(actualInput);
     await waitFor(async () => {
       const snap = await repository.refresh();
       expect(snap.events[0].actual).toBe(30);

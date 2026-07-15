@@ -22,6 +22,40 @@ export interface ParsedWeek {
 
 type Grid = (string | undefined)[][];
 
+/** Decode XML character/entity references without interpreting any markup. */
+function decodeXmlText(text: string): string {
+  return text.replace(/&(?:amp|lt|gt|quot|apos|#(\d+)|#x([0-9A-Fa-f]+));/g, (entity, decimal: string | undefined, hex: string | undefined) => {
+    if (decimal || hex) {
+      const digits = decimal ?? hex;
+      if (!digits) return entity;
+      const codePoint = Number.parseInt(digits, decimal ? 10 : 16);
+      if (codePoint <= 0x10ffff && !(codePoint >= 0xd800 && codePoint <= 0xdfff)) {
+        return String.fromCodePoint(codePoint);
+      }
+      return entity;
+    }
+
+    switch (entity) {
+      case '&amp;':
+        return '&';
+      case '&lt;':
+        return '<';
+      case '&gt;':
+        return '>';
+      case '&quot;':
+        return '"';
+      case '&apos;':
+        return "'";
+      default:
+        return entity;
+    }
+  });
+}
+
+function textFromXmlNodes(xml: string): string {
+  return [...xml.matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)].map((match) => decodeXmlText(match[1])).join('');
+}
+
 function excelSerialToISO(serial: number): string | null {
   if (!Number.isFinite(serial) || serial < 1 || serial > 60000) return null;
   // Excel's epoch is 1899-12-30 (accounting for the historical 1900 leap-year bug).
@@ -200,7 +234,7 @@ export function gridFromSheetXml(sheetXml: string, sharedStrings: string[]): Gri
       const type = typeMatch ? typeMatch[1] : '';
       let val = '';
       if (type === 'inlineStr') {
-        val = inner.match(/<t[^>]*>([\s\S]*?)<\/t>/)?.[1] ?? '';
+        val = textFromXmlNodes(inner);
       } else {
         const v = inner.match(/<v>([\s\S]*?)<\/v>/)?.[1];
         if (v != null) val = type === 's' ? (sharedStrings[Number(v)] ?? '') : v;
@@ -213,7 +247,7 @@ export function gridFromSheetXml(sheetXml: string, sharedStrings: string[]): Gri
 
 export function parseSharedStrings(xml: string | undefined): string[] {
   if (!xml) return [];
-  return [...xml.matchAll(/<si>([\s\S]*?)<\/si>/g)].map((m) => [...m[1].matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)].map((t) => t[1]).join(''));
+  return [...xml.matchAll(/<si>([\s\S]*?)<\/si>/g)].map((match) => textFromXmlNodes(match[1]));
 }
 
 export async function parseWeekWorkbook(buf: ArrayBuffer): Promise<ParsedWeek | null> {

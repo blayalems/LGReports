@@ -3,6 +3,7 @@ import { BarChart } from '../../components/charts/BarChart';
 import { Card } from '../../components/ui/Card';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { ProgressBar } from '../../components/ui/ProgressBar';
+import { DraftNumberInput } from '../../components/ui/DraftNumberInput';
 import { formatDate, toISODate, todayISO } from '../../domain/dateUtils';
 import { newId } from '../../domain/ids';
 import {
@@ -19,10 +20,6 @@ import type { Campaign, TrackerSnapshot } from '../../domain/types';
 import { showToast } from '../../hooks/useToast';
 import { useTracker } from '../../state/StoreContext';
 import styles from './CampaignPage.module.css';
-
-function parseNum(value: string): number | null {
-  return value === '' ? null : Math.max(0, Number(value));
-}
 
 /** Photos from meetings dated inside the campaign window — the cycle's story in pictures. */
 function CycleGallery({ snapshot, campaign }: { snapshot: TrackerSnapshot; campaign: Campaign }) {
@@ -235,27 +232,27 @@ export default function CampaignPage() {
                 <div className={styles.stageTop}>
                   <span className={styles.stageName}>{sp.stage.label}</span>
                   <div className={styles.numPair}>
-                    <label>
+                    <label htmlFor={`campaign-${campaign.id}-${sp.stage.key}-actual`}>
                       <span className={styles.numLabel}>Actual</span>
-                      <input
-                        type="number"
+                      <DraftNumberInput
+                        id={`campaign-${campaign.id}-${sp.stage.key}-actual`}
                         min={0}
                         className={styles.numInput}
-                        value={metricFor(sp.stage.key)?.actual ?? ''}
-                        onChange={(e) => setMetric(sp.stage.key, { actual: parseNum(e.target.value) })}
+                        value={metricFor(sp.stage.key)?.actual}
+                        onCommit={(value) => setMetric(sp.stage.key, { actual: value })}
                       />
                     </label>
                     <span className={styles.numSep} aria-hidden="true">
                       /
                     </span>
-                    <label>
+                    <label htmlFor={`campaign-${campaign.id}-${sp.stage.key}-goal`}>
                       <span className={styles.numLabel}>Goal</span>
-                      <input
-                        type="number"
+                      <DraftNumberInput
+                        id={`campaign-${campaign.id}-${sp.stage.key}-goal`}
                         min={0}
                         className={styles.numInput}
-                        value={metricFor(sp.stage.key)?.goal ?? ''}
-                        onChange={(e) => setMetric(sp.stage.key, { goal: parseNum(e.target.value) })}
+                        value={metricFor(sp.stage.key)?.goal}
+                        onCommit={(value) => setMetric(sp.stage.key, { goal: value })}
                       />
                     </label>
                   </div>
@@ -280,18 +277,18 @@ export default function CampaignPage() {
                 {vipMetrics.map((m) => (
                   <div key={m.id} className={styles.vipRow}>
                     <span className={styles.vipWeek}>Wk {(m.weekIndex ?? 0) + 1}</span>
-                    <label>
+                    <label htmlFor={`campaign-week-${m.id}-vips`}>
                       <span className="visually-hidden">VIPs in week {(m.weekIndex ?? 0) + 1}</span>
-                      <input
-                        type="number"
+                      <DraftNumberInput
+                        id={`campaign-week-${m.id}-vips`}
                         min={0}
                         className={styles.numInput}
-                        value={m.actual ?? ''}
-                        onChange={(e) =>
+                        value={m.actual}
+                        onCommit={(value) =>
                           void dispatch({
                             entity: { type: 'campaignMetric', id: m.id },
                             op: 'update',
-                            payload: { actual: parseNum(e.target.value) },
+                            payload: { actual: value },
                             baseRevision: m.revision,
                           })
                         }
@@ -315,27 +312,27 @@ export default function CampaignPage() {
                   <div key={tile.label} className={styles.growthTile}>
                     <div className={styles.growthLabel}>{tile.label}</div>
                     <div className={styles.numPair} style={{ marginBottom: 9 }}>
-                      <label>
+                      <label htmlFor={`campaign-${campaign.id}-${tile.actualKey}-actual`}>
                         <span className={styles.numLabel}>Actual</span>
-                        <input
-                          type="number"
+                        <DraftNumberInput
+                          id={`campaign-${campaign.id}-${tile.actualKey}-actual`}
                           min={0}
                           className={styles.numInput}
-                          value={metricFor(tile.actualKey)?.actual ?? ''}
-                          onChange={(e) => setMetric(tile.actualKey, { actual: parseNum(e.target.value) })}
+                          value={metricFor(tile.actualKey)?.actual}
+                          onCommit={(value) => setMetric(tile.actualKey, { actual: value })}
                         />
                       </label>
                       <span className={styles.numSep} aria-hidden="true">
                         /
                       </span>
-                      <label>
+                      <label htmlFor={`campaign-${campaign.id}-${tile.goalKey}-goal`}>
                         <span className={styles.numLabel}>Goal</span>
-                        <input
-                          type="number"
+                        <DraftNumberInput
+                          id={`campaign-${campaign.id}-${tile.goalKey}-goal`}
                           min={0}
                           className={styles.numInput}
-                          value={metricFor(tile.goalKey)?.goal ?? ''}
-                          onChange={(e) => setMetric(tile.goalKey, { goal: parseNum(e.target.value) })}
+                          value={metricFor(tile.goalKey)?.goal}
+                          onCommit={(value) => setMetric(tile.goalKey, { goal: value })}
                         />
                       </label>
                     </div>
@@ -390,19 +387,19 @@ export default function CampaignPage() {
                           }}
                         />
                       </label>
-                      <label>
+                      <label htmlFor={`campaign-rival-${(row as (typeof rivals)[number]).id}-total`}>
                         <span className="visually-hidden">Network total</span>
-                        <input
-                          type="number"
+                        <DraftNumberInput
+                          id={`campaign-rival-${(row as (typeof rivals)[number]).id}-total`}
                           min={0}
                           className={styles.numInput}
-                          value={(row as { total: number }).total || ''}
-                          onChange={(e) => {
+                          value={(row as { total: number }).total}
+                          onCommit={(value) => {
                             const rival = row as (typeof rivals)[number];
                             void dispatch({
                               entity: { type: 'rival', id: rival.id },
                               op: 'update',
-                              payload: { total: Number(e.target.value) || 0 },
+                              payload: { total: value ?? 0 },
                               baseRevision: rival.revision,
                             });
                           }}

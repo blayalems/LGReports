@@ -2,16 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import { Card } from '../../components/ui/Card';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { ProgressBar } from '../../components/ui/ProgressBar';
+import { DraftNumberInput } from '../../components/ui/DraftNumberInput';
 import { newId } from '../../domain/ids';
 import { currentWeek, meetingAttendance, meetingsForWeek, notDeleted } from '../../domain/selectors';
 import type { CampaignEvent } from '../../domain/types';
 import { showToast } from '../../hooks/useToast';
 import { useTracker } from '../../state/StoreContext';
 import styles from './EventsPage.module.css';
-
-function parseNum(value: string): number | null {
-  return value === '' ? null : Math.max(0, Number(value));
-}
 
 function EventCard({ event, focusOnMount }: { event: CampaignEvent; focusOnMount: boolean }) {
   const { dispatch } = useTracker();
@@ -77,29 +74,29 @@ function EventCard({ event, focusOnMount }: { event: CampaignEvent; focusOnMount
       <div>
         <span className={styles.fieldLabel}>Attendance goal</span>
         <div className={styles.goalRow}>
-          <label>
+          <label htmlFor={`event-${event.id}-actual`}>
             <span className="visually-hidden">Actual attendance</span>
-            <input
-              type="number"
+            <DraftNumberInput
+              id={`event-${event.id}-actual`}
               min={0}
               className={styles.numInput}
-              value={event.actual ?? ''}
+              value={event.actual}
               placeholder="0"
-              onChange={(e) => update({ actual: parseNum(e.target.value) })}
+              onCommit={(value) => update({ actual: value })}
             />
           </label>
           <span className={styles.numSep} aria-hidden="true">
             /
           </span>
-          <label>
+          <label htmlFor={`event-${event.id}-goal`}>
             <span className="visually-hidden">Attendance goal</span>
-            <input
-              type="number"
+            <DraftNumberInput
+              id={`event-${event.id}-goal`}
               min={0}
               className={styles.numInput}
-              value={event.goal ?? ''}
+              value={event.goal}
               placeholder="0"
-              onChange={(e) => update({ goal: parseNum(e.target.value) })}
+              onCommit={(value) => update({ goal: value })}
             />
           </label>
           <div className={styles.barWrap}>
@@ -201,19 +198,19 @@ export default function EventsPage() {
                   <span className={styles.targetNums}>
                     <strong>{actual}</strong> / {goal}
                   </span>
-                  <label>
+                  <label htmlFor={`group-${g.id}-weekly-target`}>
                     <span className="visually-hidden">Weekly target for {g.name}</span>
-                    <input
-                      type="number"
+                    <DraftNumberInput
+                      id={`group-${g.id}-weekly-target`}
                       min={0}
                       className={styles.numInput}
-                      value={g.weeklyTarget ?? ''}
+                      value={g.weeklyTarget}
                       placeholder="0"
-                      onChange={(e) =>
+                      onCommit={(value) =>
                         void dispatch({
                           entity: { type: 'group', id: g.id },
                           op: 'update',
-                          payload: { weeklyTarget: parseNum(e.target.value) },
+                          payload: { weeklyTarget: value },
                           baseRevision: g.revision,
                         })
                       }

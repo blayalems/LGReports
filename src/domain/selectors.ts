@@ -139,8 +139,12 @@ export function groupName(snapshot: TrackerSnapshot, groupId: string | null): st
 // ---------- Events ----------
 
 export function upcomingEvents(snapshot: TrackerSnapshot, from = new Date()) {
+  const startOfDay = parseISODate(toISODate(from));
   return notDeleted(snapshot.events)
-    .filter((e) => e.date && parseISODate(e.date)! >= from)
+    .filter((e) => {
+      const eventDate = parseISODate(e.date);
+      return eventDate != null && startOfDay != null && eventDate >= startOfDay;
+    })
     .sort((a, b) => (a.date! < b.date! ? -1 : 1));
 }
 

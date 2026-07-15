@@ -34,6 +34,8 @@ describe('sheets schema', () => {
       status: 'regular',
       groupId: null,
       phone: '',
+      address: '12 Sample Street',
+      notes: 'Pray for a new job',
       birthdayMonth: null,
       birthdayDay: null,
       photoMediaId: null,
@@ -48,6 +50,8 @@ describe('sheets schema', () => {
     const back = rowToEntity<Member>('members', row);
     expect(back).toEqual(member);
     expect(back.groupId).toBeNull();
+    expect(back.address).toBe('12 Sample Street');
+    expect(back.notes).toBe('Pray for a new job');
     expect(back.birthdayMonth).toBeNull();
     expect(back.revision).toBe(3);
   });
@@ -79,6 +83,32 @@ describe('sheets schema', () => {
     expect(headersMatch('members', undefined)).toBe(false);
     // Extra appended columns are tolerated (forward compat).
     expect(headersMatch('members', [...headersFor('members'), 'futureColumn'])).toBe(true);
+  });
+
+  it('loads v1 member rows without the appended detail fields', () => {
+    const currentHeaders = headersFor('members');
+    const legacyHeaders = currentHeaders.slice(0, -2);
+    const legacyRow = [
+      'm-old',
+      'Legacy Member',
+      'regular',
+      '',
+      '+63 900 000 0000',
+      '',
+      '',
+      '',
+      '1',
+      'created',
+      'actor',
+      'updated',
+      'actor',
+      '',
+    ];
+
+    expect(headersMatch('members', legacyHeaders)).toBe(true);
+    const member = rowToEntity<Member>('members', legacyRow);
+    expect(member.address).toBe('');
+    expect(member.notes).toBe('');
   });
 
   it('skips blank rows and tolerates short rows from the values API', () => {

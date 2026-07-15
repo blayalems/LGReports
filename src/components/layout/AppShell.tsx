@@ -15,7 +15,16 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <>
-      <a href="#main-content" className="skip-link">
+      <a
+        href="#main-content"
+        className="skip-link"
+        onClick={(event) => {
+          // The application route lives in the URL hash. Letting this anchor
+          // navigate would replace (for example) #/members with #main-content.
+          event.preventDefault();
+          document.getElementById('main-content')?.focus();
+        }}
+      >
         Skip to main content
       </a>
       <div className={styles.mesh} aria-hidden="true">

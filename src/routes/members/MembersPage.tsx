@@ -54,7 +54,17 @@ export default function MembersPage() {
     await dispatch({
       entity: { type: 'member', id },
       op: 'create',
-      payload: { name: '', status: 'regular', groupId: null, phone: '', birthdayMonth: null, birthdayDay: null, photoMediaId: null },
+      payload: {
+        name: '',
+        status: 'regular',
+        groupId: null,
+        phone: '',
+        address: '',
+        notes: '',
+        birthdayMonth: null,
+        birthdayDay: null,
+        photoMediaId: null,
+      },
     });
     setOpenMemberId(id);
   };

@@ -119,4 +119,14 @@ describe('grid/shared-string helpers', () => {
     const grid = gridFromSheetXml(xml, shared);
     expect(grid[0][0]).toBe('World');
   });
+
+  it('decodes XML entities in shared and inline strings', () => {
+    const shared = parseSharedStrings('<sst><si><t>Grace &amp; Truth &lt;LG&gt; &quot;North&quot; &apos;A&apos; &#35;1 &#x1F64F;</t></si></sst>');
+    expect(shared).toEqual([`Grace & Truth <LG> "North" 'A' #1 🙏`]);
+
+    const xml =
+      '<row r="1"><c r="A1" t="inlineStr"><is><t>Rock &amp; Water</t></is></c><c r="B1" t="inlineStr"><is><r><t>Life </t></r><r><t>Group &lt;3</t></r></is></c></row>';
+    const grid = gridFromSheetXml(xml, []);
+    expect(grid[0]).toEqual(['Rock & Water', 'Life Group <3']);
+  });
 });

@@ -4,6 +4,7 @@ import { createDemoSnapshot, createEmptySnapshot } from '../../domain/demoData';
 import { newId } from '../../domain/ids';
 import { nowISO } from '../../domain/dateUtils';
 import { bumpRevision, revisioned } from '../../domain/factory';
+import { assertTrackerSnapshot } from '../../domain/snapshotValidation';
 import { ConflictError, type DomainCommand, type EntityType, type Revisioned, type SyncState, type TrackerSnapshot } from '../../domain/types';
 import type { ConnectResult, TrackerRepository } from '../TrackerRepository';
 
@@ -23,13 +24,6 @@ const REVISIONED_STORE_BY_ENTITY: Partial<Record<EntityType, RevisionedStoreName
   rival: 'rivals',
   event: 'events',
 };
-
-/** Replace a store's full contents. _writeAll callers (seed/restore/reset) mean "this snapshot and nothing else" — merging old rows in would resurrect deleted data. */
-async function replaceAll<T>(db: IDBPDatabase<LocalSchema>, store: StoreNames<LocalSchema>, items: T[]) {
-  const tx = db.transaction(store, 'readwrite');
-  await tx.store.clear();
-  await Promise.all([...items.map((item) => tx.store.put(item as never)), tx.done]);
-}
 
 /**
  * Phase 1 backend: everything lives in this browser's IndexedDB. No PII ever touches
@@ -95,10 +89,16 @@ export class LocalTrackerRepository implements TrackerRepository {
   }
 
   async restoreSnapshot(snapshot: TrackerSnapshot): Promise<void> {
+    assertTrackerSnapshot(snapshot);
     this.setState('saving');
-    const db = await getDB();
-    await this._writeAll(db, snapshot);
-    this.setState('saved');
+    try {
+      const db = await getDB();
+      await this._writeAll(db, snapshot);
+      this.setState('saved');
+    } catch (err) {
+      this.setState('error');
+      throw err;
+    }
   }
 
   async seedDemoData(): Promise<void> {
@@ -201,7 +201,7 @@ export class LocalTrackerRepository implements TrackerRepository {
       config: configs[0],
       stages,
       groups,
-      members,
+      members: members.map((member) => ({ ...member, address: member.address ?? '', notes: member.notes ?? '' })),
       memberMilestones,
       weeks,
       meetings,
@@ -216,20 +216,54 @@ export class LocalTrackerRepository implements TrackerRepository {
   }
 
   private async _writeAll(db: IDBPDatabase<LocalSchema>, snap: TrackerSnapshot) {
-    await replaceAll(db, 'meta', [snap.meta]);
-    await replaceAll(db, 'config', [snap.config]);
-    await replaceAll(db, 'stages', snap.stages);
-    await replaceAll(db, 'groups', snap.groups);
-    await replaceAll(db, 'members', snap.members);
-    await replaceAll(db, 'memberMilestones', snap.memberMilestones);
-    await replaceAll(db, 'weeks', snap.weeks);
-    await replaceAll(db, 'meetings', snap.meetings);
-    await replaceAll(db, 'attendanceEvents', snap.attendanceEvents);
-    await replaceAll(db, 'campaigns', snap.campaigns);
-    await replaceAll(db, 'campaignMetrics', snap.campaignMetrics);
-    await replaceAll(db, 'rivals', snap.rivals);
-    await replaceAll(db, 'events', snap.events);
-    await replaceAll(db, 'media', snap.media);
-    await replaceAll(db, 'audit', snap.audit);
+    const replacements = [
+      ['meta', [snap.meta]],
+      ['config', [snap.config]],
+      ['stages', snap.stages],
+      ['groups', snap.groups],
+      ['members', snap.members.map((member) => ({ ...member, address: member.address ?? '', notes: member.notes ?? '' }))],
+      ['memberMilestones', snap.memberMilestones],
+      ['weeks', snap.weeks],
+      ['meetings', snap.meetings],
+      ['attendanceEvents', snap.attendanceEvents],
+      ['campaigns', snap.campaigns],
+      ['campaignMetrics', snap.campaignMetrics],
+      ['rivals', snap.rivals],
+      ['events', snap.events],
+      ['media', snap.media],
+      ['audit', snap.audit],
+    ] as const;
+    const storeNames = replacements.map(([store]) => store) as StoreNames<LocalSchema>[];
+    const tx = db.transaction(storeNames, 'readwrite');
+    const requests: Promise<unknown>[] = [];
+    let transactionError: unknown;
+    const transactionDone = tx.done.catch((err: unknown) => {
+      transactionError = err;
+    });
+
+    try {
+      // Queue every clear and put before awaiting. IndexedDB guarantees that one
+      // transaction either commits all snapshot stores or rolls all of them back.
+      for (const [storeName, items] of replacements) {
+        const store = tx.objectStore(storeName);
+        requests.push(store.clear());
+        for (const item of items) requests.push(store.put(item as never));
+      }
+
+      await Promise.all(requests);
+      await transactionDone;
+      if (transactionError) throw transactionError;
+    } catch (err) {
+      // A synchronous cloning/key error can happen while requests are being
+      // queued. Explicitly abort so earlier queued stores cannot still commit.
+      try {
+        tx.abort();
+      } catch {
+        // The transaction may already have aborted itself.
+      }
+      await Promise.allSettled(requests);
+      await transactionDone;
+      throw err;
+    }
   }
 }

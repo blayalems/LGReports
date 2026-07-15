@@ -7,7 +7,8 @@ import { Card } from '../ui/Card';
  * (a launch blocker) — a brand-new install starts genuinely empty unless you opt in.
  */
 export function FirstRun() {
-  const { startBlank, startDemo } = useTracker();
+  const { startBlank, startDemo, repository } = useTracker();
+  const canDemo = !!repository.seedDemoData;
 
   return (
     <section className="view" style={{ padding: 'clamp(16px,3.5vw,36px)', maxWidth: 640, margin: '40px auto' }}>
@@ -17,8 +18,9 @@ export function FirstRun() {
           Set up Life Group Tracker
         </h1>
         <p style={{ color: 'var(--text2)', lineHeight: 1.6, marginBottom: 20 }}>
-          Your data stays on this device for now — Google Sheets sync for shared, multi-leader access is coming in a follow-up update. You can start from a
-          completely blank workspace, or load a small set of fictional sample records to see how everything fits together before entering your real roster.
+          {repository.isRemote
+            ? 'This shared workbook is empty. Start blank and build your roster in Settings — every leader connected to the workbook will see the same data.'
+            : 'Your data stays on this device until you connect a shared Google Sheets workbook in Settings. Start from a completely blank workspace, or load a small set of fictional sample records to see how everything fits together before entering your real roster.'}
         </p>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <button
@@ -38,23 +40,25 @@ export function FirstRun() {
           >
             Start blank
           </button>
-          <button
-            type="button"
-            className="pressable"
-            onClick={() => startDemo()}
-            style={{
-              background: 'var(--surface2)',
-              color: 'var(--text)',
-              border: '1px solid var(--stroke2)',
-              borderRadius: 100,
-              padding: '13px 22px',
-              fontWeight: 700,
-              fontSize: 14,
-              cursor: 'pointer',
-            }}
-          >
-            Load fictional sample data
-          </button>
+          {canDemo && (
+            <button
+              type="button"
+              className="pressable"
+              onClick={() => startDemo()}
+              style={{
+                background: 'var(--surface2)',
+                color: 'var(--text)',
+                border: '1px solid var(--stroke2)',
+                borderRadius: 100,
+                padding: '13px 22px',
+                fontWeight: 700,
+                fontSize: 14,
+                cursor: 'pointer',
+              }}
+            >
+              Load fictional sample data
+            </button>
+          )}
         </div>
       </Card>
     </section>

@@ -110,6 +110,8 @@ export function createDemoSnapshot(actorId: string): TrackerSnapshot {
     status: m.status,
     groupId: groups[m.groupIdx].id,
     phone: '',
+    address: '',
+    notes: '',
     birthdayMonth: null,
     birthdayDay: null,
     photoMediaId: null,

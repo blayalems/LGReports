@@ -28,6 +28,25 @@ interface StoreContextValue {
 
 const StoreContext = createContext<StoreContextValue | null>(null);
 
+function currentRevision(snapshot: TrackerSnapshot | null, type: EntityType, id: string): number | undefined {
+  if (!snapshot) return undefined;
+  if (type === 'config') return snapshot.config.id === id ? snapshot.config.revision : undefined;
+
+  const collections: Partial<Record<EntityType, readonly { id: string; revision: number }[]>> = {
+    stage: snapshot.stages,
+    group: snapshot.groups,
+    member: snapshot.members,
+    memberMilestone: snapshot.memberMilestones,
+    week: snapshot.weeks,
+    meeting: snapshot.meetings,
+    campaign: snapshot.campaigns,
+    campaignMetric: snapshot.campaignMetrics,
+    rival: snapshot.rivals,
+    event: snapshot.events,
+  };
+  return collections[type]?.find((row) => row.id === id)?.revision;
+}
+
 export function StoreProvider({
   repository,
   mediaRepository,
@@ -43,15 +62,25 @@ export function StoreProvider({
   const [syncState, setSyncState] = useState<SyncState>(repository.getSyncState());
   const [dismissedFirstRun, setDismissedFirstRun] = useState(false);
   const queueRef = useRef<Promise<unknown>>(Promise.resolve());
+  const snapshotRef = useRef<TrackerSnapshot | null>(null);
   const announce = useAnnounce();
 
   useEffect(() => repository.onSyncStateChange(setSyncState), [repository]);
 
   useEffect(() => {
     let cancelled = false;
-    repository.loadSnapshot().then((snap) => {
-      if (!cancelled) setSnapshot(snap);
-    });
+    repository
+      .loadSnapshot()
+      .then((snap) => {
+        if (!cancelled) {
+          snapshotRef.current = snap;
+          setSnapshot(snap);
+        }
+      })
+      .catch(() => {
+        // Remote backend without a live session: snapshot stays null and the
+        // repository reports 'disconnected'/'error' — App renders the sign-in gate.
+      });
     return () => {
       cancelled = true;
     };
@@ -59,17 +88,41 @@ export function StoreProvider({
 
   const refresh = useCallback(async () => {
     const snap = await repository.refresh();
+    snapshotRef.current = snap;
     setSnapshot(snap);
   }, [repository]);
+
+  // Remote source of truth: re-fetch when the tab regains focus and every 60s while
+  // visible, so one leader's edits show up on another leader's open screen.
+  useEffect(() => {
+    if (!repository.isRemote) return;
+    const tryRefresh = () => {
+      if (document.visibilityState === 'visible') refresh().catch(() => undefined);
+    };
+    const interval = setInterval(tryRefresh, 60_000);
+    document.addEventListener('visibilitychange', tryRefresh);
+    window.addEventListener('focus', tryRefresh);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', tryRefresh);
+      window.removeEventListener('focus', tryRefresh);
+    };
+  }, [repository, refresh]);
 
   const dispatch = useCallback(
     (partial: PendingCommand) => {
       const run = async () => {
+        const latestRevision = currentRevision(snapshotRef.current, partial.entity.type, partial.entity.id);
+        const baseRevision =
+          partial.baseRevision !== undefined && latestRevision !== undefined && latestRevision > partial.baseRevision
+            ? latestRevision
+            : partial.baseRevision;
         const command: DomainCommand = {
           commandId: newId(),
           actorId,
           timestamp: nowISO(),
           ...partial,
+          baseRevision,
         };
         try {
           await repository.saveCommand(command);

@@ -169,7 +169,19 @@ export function createDemoSnapshot(actorId: string): TrackerSnapshot {
     weekIndex: null,
     ...revisioned(actorId, now),
   }));
-  snap.events = [{ id: newId(), name: 'Sample Retreat', date: null, type: 'Retreat', goal: 60, actual: 0, notes: '', ...revisioned(actorId, now) }];
+  snap.events = [
+    {
+      id: newId(),
+      name: 'Sample Retreat',
+      date: null,
+      type: 'Retreat',
+      goal: 60,
+      actual: 0,
+      notes: '',
+      leaderAttendance: Object.fromEntries(groups.map((group) => [group.id, { actual: 0, goal: 15 }])),
+      ...revisioned(actorId, now),
+    },
+  ];
 
   return snap;
 }

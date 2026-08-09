@@ -120,6 +120,64 @@
   align-items: center;
   gap: 8px;
 }
+.attendanceFieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.attendanceTable {
+  overflow: hidden;
+  border: 1px solid var(--stroke2);
+  border-radius: 10px;
+  margin-bottom: 10px;
+}
+.attendanceRow {
+  display: grid;
+  grid-template-columns: minmax(110px, 1fr) 70px 70px;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border-bottom: 1px solid var(--stroke2);
+}
+.attendanceRow:last-child {
+  border-bottom: 0;
+}
+.attendanceHead {
+  color: var(--text3);
+  background: var(--surface2);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.leaderName {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.legacyRow {
+  background: var(--surface2);
+}
+.attendanceEmpty {
+  margin: 0 0 10px;
+  color: var(--text3);
+  font-size: 12.5px;
+}
+.totalLabel {
+  color: var(--text3);
+  font-size: 12px;
+  font-weight: 600;
+}
+.totalValue {
+  color: var(--text);
+  font-size: 12.5px;
+  white-space: nowrap;
+}
 .numInput {
   width: 70px;
   border: 1px solid var(--input-stroke);
@@ -138,6 +196,17 @@
 .barWrap {
   flex: 1;
   min-width: 60px;
+}
+
+@media (max-width: 420px) {
+  .attendanceRow {
+    grid-template-columns: minmax(90px, 1fr) 62px 62px;
+    gap: 6px;
+    padding-inline: 7px;
+  }
+  .attendanceRow .numInput {
+    width: 62px;
+  }
 }
 
 .targetsTitle {

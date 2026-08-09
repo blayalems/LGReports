@@ -36,14 +36,7 @@ interface FieldSpec {
 
 const f = (key: string, kind: FieldKind = 'string'): FieldSpec => ({ key, kind });
 
-const REVISIONED: FieldSpec[] = [
-  f('revision', 'number'),
-  f('createdAt'),
-  f('createdBy'),
-  f('updatedAt'),
-  f('updatedBy'),
-  f('deletedAt', 'stringOrNull'),
-];
+const REVISIONED: FieldSpec[] = [f('revision', 'number'), f('createdAt'), f('createdBy'), f('updatedAt'), f('updatedBy'), f('deletedAt', 'stringOrNull')];
 
 export const TAB_SPECS = {
   _meta: [f('trackerId'), f('schemaVersion', 'number')],
@@ -126,8 +119,19 @@ export const TAB_SPECS = {
     f('actual', 'numberOrNull'),
     f('notes'),
     ...REVISIONED,
+    // Appended for backward compatibility with existing shared workbooks.
+    f('leaderAttendance', 'json'),
   ],
-  media: [f('id'), f('kind'), f('ownerType'), f('ownerId'), f('driveFileId', 'stringOrNull'), f('localBlobKey', 'stringOrNull'), f('createdAt'), f('createdBy')],
+  media: [
+    f('id'),
+    f('kind'),
+    f('ownerType'),
+    f('ownerId'),
+    f('driveFileId', 'stringOrNull'),
+    f('localBlobKey', 'stringOrNull'),
+    f('createdAt'),
+    f('createdBy'),
+  ],
   audit: [f('id'), f('actorId'), f('action'), f('entityType'), f('entityId'), f('timestamp'), f('summary')],
 } as const;
 
@@ -232,7 +236,8 @@ export function headersMatch(tab: TabName, headerRow: (string | undefined)[] | u
   const expected = headersFor(tab);
   if (!headerRow) return false;
   const legacyMemberColumnCount = expected.length - 2;
-  const requiredCount = tab === 'members' ? legacyMemberColumnCount : expected.length;
+  const legacyEventColumnCount = expected.length - 1;
+  const requiredCount = tab === 'members' ? legacyMemberColumnCount : tab === 'events' ? legacyEventColumnCount : expected.length;
   if (headerRow.length < requiredCount) return false;
   return expected.slice(0, Math.min(expected.length, headerRow.length)).every((h, i) => (headerRow[i] ?? '').trim() === h);
 }
@@ -282,10 +287,7 @@ export function parseWorkbook(valuesByTab: Partial<Record<TabName, (string | und
 
 /** Full workbook contents (headers + rows) for provisioning a new spreadsheet from a snapshot. */
 export function workbookValues(snapshot: TrackerSnapshot): Record<TabName, string[][]> {
-  const rowsFor = (tab: TabName, items: Record<string, unknown>[]): string[][] => [
-    headersFor(tab),
-    ...items.map((item) => entityToRow(tab, item)),
-  ];
+  const rowsFor = (tab: TabName, items: Record<string, unknown>[]): string[][] => [headersFor(tab), ...items.map((item) => entityToRow(tab, item))];
   return {
     _meta: rowsFor('_meta', [{ trackerId: snapshot.meta.trackerId, schemaVersion: SCHEMA_VERSION }]),
     config: rowsFor('config', [snapshot.config as unknown as Record<string, unknown>]),

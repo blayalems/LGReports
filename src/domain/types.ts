@@ -148,6 +148,11 @@ export interface Rival extends Revisioned {
   total: number;
 }
 
+export interface EventAttendanceTotal {
+  goal: number | null;
+  actual: number | null;
+}
+
 export interface CampaignEvent extends Revisioned {
   id: ID;
   name: string;
@@ -156,6 +161,11 @@ export interface CampaignEvent extends Revisioned {
   goal: number | null;
   actual: number | null;
   notes: string;
+  /**
+   * Attendance actuals and goals keyed by life-group id. The top-level actual
+   * and goal remain denormalized totals for older clients and existing sheets.
+   */
+  leaderAttendance?: Record<ID, EventAttendanceTotal> | null;
 }
 
 // ---------- Operations ----------

@@ -56,12 +56,7 @@ function isRevisioned(value: UnknownRecord): value is UnknownRecord & Revisioned
 }
 
 function isMeta(value: unknown): value is Meta {
-  return (
-    isRecord(value) &&
-    isString(value.trackerId) &&
-    Number.isInteger(value.schemaVersion) &&
-    isNullableString(value.spreadsheetId)
-  );
+  return isRecord(value) && isString(value.trackerId) && Number.isInteger(value.schemaVersion) && isNullableString(value.spreadsheetId);
 }
 
 function isConfig(value: unknown): value is Config {
@@ -83,14 +78,7 @@ function isConfig(value: unknown): value is Config {
 }
 
 function isStage(value: unknown): value is Stage {
-  return (
-    isRecord(value) &&
-    isRevisioned(value) &&
-    isString(value.id) &&
-    isString(value.key) &&
-    isString(value.label) &&
-    isNumber(value.order)
-  );
+  return isRecord(value) && isRevisioned(value) && isString(value.id) && isString(value.key) && isString(value.label) && isNumber(value.order);
 }
 
 function isGroup(value: unknown): value is Group {
@@ -124,12 +112,7 @@ function isMember(value: unknown): value is Member {
 
 function isMemberMilestone(value: unknown): value is MemberMilestone {
   return (
-    isRecord(value) &&
-    isRevisioned(value) &&
-    isString(value.id) &&
-    isString(value.memberId) &&
-    isString(value.stageKey) &&
-    isNullableString(value.completedOn)
+    isRecord(value) && isRevisioned(value) && isString(value.id) && isString(value.memberId) && isString(value.stageKey) && isNullableString(value.completedOn)
   );
 }
 
@@ -180,14 +163,7 @@ function isAttendanceEvent(value: unknown): value is AttendanceEvent {
 }
 
 function isCampaign(value: unknown): value is Campaign {
-  return (
-    isRecord(value) &&
-    isRevisioned(value) &&
-    isString(value.id) &&
-    isString(value.name) &&
-    isString(value.start) &&
-    isString(value.end)
-  );
+  return isRecord(value) && isRevisioned(value) && isString(value.id) && isString(value.name) && isString(value.start) && isString(value.end);
 }
 
 function isCampaignMetric(value: unknown): value is CampaignMetric {
@@ -204,17 +180,16 @@ function isCampaignMetric(value: unknown): value is CampaignMetric {
 }
 
 function isRival(value: unknown): value is Rival {
-  return (
-    isRecord(value) &&
-    isRevisioned(value) &&
-    isString(value.id) &&
-    isString(value.campaignId) &&
-    isString(value.name) &&
-    isNumber(value.total)
-  );
+  return isRecord(value) && isRevisioned(value) && isString(value.id) && isString(value.campaignId) && isString(value.name) && isNumber(value.total);
 }
 
 function isCampaignEvent(value: unknown): value is CampaignEvent {
+  const leaderAttendance = value && isRecord(value) ? value.leaderAttendance : undefined;
+  const hasValidLeaderAttendance =
+    leaderAttendance === undefined ||
+    leaderAttendance === null ||
+    (isRecord(leaderAttendance) &&
+      Object.values(leaderAttendance).every((total) => isRecord(total) && isNullableNumber(total.actual) && isNullableNumber(total.goal)));
   return (
     isRecord(value) &&
     isRevisioned(value) &&
@@ -224,7 +199,8 @@ function isCampaignEvent(value: unknown): value is CampaignEvent {
     isString(value.type) &&
     isNullableNumber(value.goal) &&
     isNullableNumber(value.actual) &&
-    isString(value.notes)
+    isString(value.notes) &&
+    hasValidLeaderAttendance
   );
 }
 

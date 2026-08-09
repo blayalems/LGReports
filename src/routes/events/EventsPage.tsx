@@ -4,23 +4,64 @@ import { EmptyState } from '../../components/ui/EmptyState';
 import { ProgressBar } from '../../components/ui/ProgressBar';
 import { DraftNumberInput } from '../../components/ui/DraftNumberInput';
 import { newId } from '../../domain/ids';
+import { toISODate } from '../../domain/dateUtils';
 import { currentWeek, meetingAttendance, meetingsForWeek, notDeleted } from '../../domain/selectors';
-import type { CampaignEvent } from '../../domain/types';
+import type { CampaignEvent, EventAttendanceTotal, Group } from '../../domain/types';
 import { showToast } from '../../hooks/useToast';
 import { useTracker } from '../../state/StoreContext';
 import styles from './EventsPage.module.css';
 
-function EventCard({ event, focusOnMount }: { event: CampaignEvent; focusOnMount: boolean }) {
+const LEGACY_TOTAL_KEY = '__legacy_unassigned__';
+
+function attendanceFor(event: CampaignEvent): Record<string, EventAttendanceTotal> {
+  if (event.leaderAttendance && Object.keys(event.leaderAttendance).length > 0) return event.leaderAttendance;
+  if ((event.actual ?? 0) > 0 || (event.goal ?? 0) > 0) {
+    return { [LEGACY_TOTAL_KEY]: { actual: event.actual, goal: event.goal } };
+  }
+  return {};
+}
+
+function attendanceTotals(attendance: Record<string, EventAttendanceTotal>) {
+  return Object.values(attendance).reduce<{ actual: number; goal: number }>(
+    (total, row) => ({ actual: total.actual + (row.actual ?? 0), goal: total.goal + (row.goal ?? 0) }),
+    { actual: 0, goal: 0 },
+  );
+}
+
+function EventCard({ event, groups, focusOnMount }: { event: CampaignEvent; groups: Group[]; focusOnMount: boolean }) {
   const { dispatch } = useTracker();
   const nameRef = useRef<HTMLInputElement>(null);
+  const attendanceFromSnapshot = attendanceFor(event);
+  const attendanceRef = useRef(attendanceFromSnapshot);
 
   useEffect(() => {
     if (focusOnMount) nameRef.current?.focus();
   }, [focusOnMount]);
 
+  useEffect(() => {
+    attendanceRef.current = attendanceFromSnapshot;
+  }, [event, attendanceFromSnapshot]);
+
   const update = (payload: Partial<CampaignEvent>) => {
     void dispatch({ entity: { type: 'event', id: event.id }, op: 'update', payload, baseRevision: event.revision });
   };
+
+  const updateAttendance = (groupId: string, field: keyof EventAttendanceTotal, value: number | null) => {
+    const currentAttendance = attendanceRef.current;
+    const currentRow = currentAttendance[groupId] ?? { actual: null, goal: null };
+    const leaderAttendance = {
+      ...currentAttendance,
+      [groupId]: { ...currentRow, [field]: value },
+    };
+    // Keep rapid Actual -> Goal edits from rebuilding the second payload from a
+    // stale render while the first revision is still saving.
+    attendanceRef.current = leaderAttendance;
+    const totals = attendanceTotals(leaderAttendance);
+    update({ leaderAttendance, actual: totals.actual, goal: totals.goal });
+  };
+
+  const attendance = attendanceFromSnapshot;
+  const totals = attendanceTotals(attendance);
 
   const onDelete = () => {
     if (!window.confirm(`Delete "${event.name || 'this event'}"?`)) return;
@@ -47,7 +88,17 @@ function EventCard({ event, focusOnMount }: { event: CampaignEvent; focusOnMount
         </label>
         {event.type && <span className={styles.typeChip}>{event.type}</span>}
         <button type="button" className={styles.deleteBtn} aria-label={`Delete event ${event.name || ''}`} onClick={onDelete}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <svg
+            width="15"
+            height="15"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
             <path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" />
           </svg>
         </button>
@@ -71,39 +122,92 @@ function EventCard({ event, focusOnMount }: { event: CampaignEvent; focusOnMount
         </label>
       </div>
 
-      <div>
-        <span className={styles.fieldLabel}>Attendance goal</span>
+      <fieldset className={styles.attendanceFieldset}>
+        <legend className={styles.fieldLabel}>Attendance per leader</legend>
+        {groups.length === 0 ? (
+          <p className={styles.attendanceEmpty}>Add life groups in Settings to assign attendance goals by leader.</p>
+        ) : (
+          <div className={styles.attendanceTable}>
+            <div className={`${styles.attendanceRow} ${styles.attendanceHead}`} aria-hidden="true">
+              <span>Leader</span>
+              <span>Actual</span>
+              <span>Goal</span>
+            </div>
+            {groups.map((group) => {
+              const row = attendance[group.id] ?? { actual: null, goal: null };
+              return (
+                <div key={group.id} className={styles.attendanceRow}>
+                  <span className={styles.leaderName} title={group.name}>
+                    {group.name}
+                  </span>
+                  <label htmlFor={`event-${event.id}-group-${group.id}-actual`}>
+                    <span className="visually-hidden">
+                      Actual attendance for {group.name} at {event.name || 'this event'}
+                    </span>
+                    <DraftNumberInput
+                      id={`event-${event.id}-group-${group.id}-actual`}
+                      min={0}
+                      className={styles.numInput}
+                      value={row.actual}
+                      placeholder="0"
+                      onCommit={(value) => updateAttendance(group.id, 'actual', value)}
+                    />
+                  </label>
+                  <label htmlFor={`event-${event.id}-group-${group.id}-goal`}>
+                    <span className="visually-hidden">
+                      Attendance goal for {group.name} at {event.name || 'this event'}
+                    </span>
+                    <DraftNumberInput
+                      id={`event-${event.id}-group-${group.id}-goal`}
+                      min={0}
+                      className={styles.numInput}
+                      value={row.goal}
+                      placeholder="0"
+                      onCommit={(value) => updateAttendance(group.id, 'goal', value)}
+                    />
+                  </label>
+                </div>
+              );
+            })}
+            {attendance[LEGACY_TOTAL_KEY] && (
+              <div className={`${styles.attendanceRow} ${styles.legacyRow}`}>
+                <span className={styles.leaderName}>Unassigned legacy total</span>
+                <label htmlFor={`event-${event.id}-legacy-actual`}>
+                  <span className="visually-hidden">Unassigned actual attendance at {event.name || 'this event'}</span>
+                  <DraftNumberInput
+                    id={`event-${event.id}-legacy-actual`}
+                    min={0}
+                    className={styles.numInput}
+                    value={attendance[LEGACY_TOTAL_KEY].actual}
+                    placeholder="0"
+                    onCommit={(value) => updateAttendance(LEGACY_TOTAL_KEY, 'actual', value)}
+                  />
+                </label>
+                <label htmlFor={`event-${event.id}-legacy-goal`}>
+                  <span className="visually-hidden">Unassigned attendance goal at {event.name || 'this event'}</span>
+                  <DraftNumberInput
+                    id={`event-${event.id}-legacy-goal`}
+                    min={0}
+                    className={styles.numInput}
+                    value={attendance[LEGACY_TOTAL_KEY].goal}
+                    placeholder="0"
+                    onCommit={(value) => updateAttendance(LEGACY_TOTAL_KEY, 'goal', value)}
+                  />
+                </label>
+              </div>
+            )}
+          </div>
+        )}
         <div className={styles.goalRow}>
-          <label htmlFor={`event-${event.id}-actual`}>
-            <span className="visually-hidden">Actual attendance</span>
-            <DraftNumberInput
-              id={`event-${event.id}-actual`}
-              min={0}
-              className={styles.numInput}
-              value={event.actual}
-              placeholder="0"
-              onCommit={(value) => update({ actual: value })}
-            />
-          </label>
-          <span className={styles.numSep} aria-hidden="true">
-            /
-          </span>
-          <label htmlFor={`event-${event.id}-goal`}>
-            <span className="visually-hidden">Attendance goal</span>
-            <DraftNumberInput
-              id={`event-${event.id}-goal`}
-              min={0}
-              className={styles.numInput}
-              value={event.goal}
-              placeholder="0"
-              onCommit={(value) => update({ goal: value })}
-            />
-          </label>
+          <span className={styles.totalLabel}>Network total</span>
+          <strong className={styles.totalValue}>
+            {totals.actual} / {totals.goal}
+          </strong>
           <div className={styles.barWrap}>
-            <ProgressBar actual={event.actual ?? 0} goal={event.goal ?? 0} label={`${event.name || 'Event'}: ${event.actual ?? 0} of ${event.goal ?? 0}`} />
+            <ProgressBar actual={totals.actual} goal={totals.goal} label={`${event.name || 'Event'} network total: ${totals.actual} of ${totals.goal}`} />
           </div>
         </div>
-      </div>
+      </fieldset>
 
       <label>
         <span className={styles.fieldLabel}>Notes</span>
@@ -126,14 +230,16 @@ export default function EventsPage() {
   if (!snapshot) return null;
 
   // Dated upcoming events first, then undated, then past.
-  const today = new Date().toISOString().slice(0, 10);
+  const today = toISODate(new Date());
   const events = notDeleted(snapshot.events)
     .slice()
     .sort((a, b) => {
       const rank = (e: CampaignEvent) => (e.date && e.date >= today ? 0 : e.date ? 2 : 1);
       return rank(a) - rank(b) || (a.date ?? '').localeCompare(b.date ?? '');
     });
-  const groups = notDeleted(snapshot.groups);
+  const groups = notDeleted(snapshot.groups)
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name));
   const week = currentWeek(snapshot);
 
   const addEvent = async () => {
@@ -141,7 +247,7 @@ export default function EventsPage() {
     await dispatch({
       entity: { type: 'event', id },
       op: 'create',
-      payload: { name: '', date: null, type: '', goal: null, actual: null, notes: '' },
+      payload: { name: '', date: null, type: '', goal: 0, actual: 0, notes: '', leaderAttendance: {} },
     });
     setNewEventId(id);
   };
@@ -173,7 +279,7 @@ export default function EventsPage() {
         ) : (
           <div className={styles.grid}>
             {events.map((e) => (
-              <EventCard key={e.id} event={e} focusOnMount={e.id === newEventId} />
+              <EventCard key={e.id} event={e} groups={groups} focusOnMount={e.id === newEventId} />
             ))}
           </div>
         )}

@@ -10,26 +10,33 @@ beforeEach(async () => {
 });
 
 describe('EventsPage', () => {
-  it('renders seeded events and per-group targets', async () => {
+  it('renders seeded events with per-leader attendance and per-group weekly targets', async () => {
     await renderWithProviders(<EventsPage />);
     expect(await screen.findByDisplayValue('Sample Retreat')).toBeInTheDocument();
     expect(screen.getByText('Weekly attendance targets per life group')).toBeInTheDocument();
-    expect(screen.getByText('Alex Rivera')).toBeInTheDocument();
+    expect(screen.getAllByText('Alex Rivera')).toHaveLength(2);
+    expect(screen.getByLabelText('Attendance goal for Alex Rivera at Sample Retreat')).toHaveValue(15);
     expect(screen.getByLabelText('Weekly target for Alex Rivera')).toHaveValue(5);
   });
 
-  it("editing an event's actual attendance updates its progress bar", async () => {
+  it("editing a leader's event attendance updates the stored breakdown and network total", async () => {
     const { repository } = await renderWithProviders(<EventsPage />);
     await screen.findByDisplayValue('Sample Retreat');
-    const actualInput = screen.getByLabelText('Actual attendance');
+    const actualInput = screen.getByLabelText('Actual attendance for Alex Rivera at Sample Retreat');
     fireEvent.change(actualInput, { target: { value: '30' } });
     fireEvent.blur(actualInput);
+    const goalInput = screen.getByLabelText('Attendance goal for Alex Rivera at Sample Retreat');
+    fireEvent.change(goalInput, { target: { value: '20' } });
+    fireEvent.blur(goalInput);
     await waitFor(async () => {
       const snap = await repository.refresh();
+      const alex = snap.groups.find((group) => group.name === 'Alex Rivera')!;
+      expect(snap.events[0].leaderAttendance?.[alex.id].actual).toBe(30);
+      expect(snap.events[0].leaderAttendance?.[alex.id].goal).toBe(20);
       expect(snap.events[0].actual).toBe(30);
+      expect(snap.events[0].goal).toBe(65);
     });
-    // Seeded goal is 60, so the bar reads 30 of 60.
-    expect(await screen.findByRole('img', { name: /30 of 60/i })).toBeInTheDocument();
+    expect(await screen.findByRole('img', { name: /network total: 30 of 65/i })).toBeInTheDocument();
   });
 
   it('adds a new event card', async () => {

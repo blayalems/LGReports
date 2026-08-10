@@ -64,7 +64,8 @@ The public OAuth Client ID can be supplied as the repository Actions variable
 - Start a Sunday reporting week and prefill one row per group.
 - Check members in, attach a meeting photo, validate, submit, reopen, print, or
   export the weekly report.
-- Track campaign goals, weekly VIPs, network growth, events, and group targets.
+- Track campaign goals, weekly VIPs, network growth, and event attendance goals
+  and actuals per leader, with calculated network totals.
 - Review trends, previous weeks, audit history, birthdays, and follow-up needs.
 - Customize church details, theme, accent, stages, statuses, and backups.
 

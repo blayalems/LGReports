@@ -83,27 +83,14 @@ describe('sheets schema', () => {
     expect(headersMatch('members', undefined)).toBe(false);
     // Extra appended columns are tolerated (forward compat).
     expect(headersMatch('members', [...headersFor('members'), 'futureColumn'])).toBe(true);
+    // Event attendance was appended after the original v1 event columns.
+    expect(headersMatch('events', headersFor('events').slice(0, -1))).toBe(true);
   });
 
   it('loads v1 member rows without the appended detail fields', () => {
     const currentHeaders = headersFor('members');
     const legacyHeaders = currentHeaders.slice(0, -2);
-    const legacyRow = [
-      'm-old',
-      'Legacy Member',
-      'regular',
-      '',
-      '+63 900 000 0000',
-      '',
-      '',
-      '',
-      '1',
-      'created',
-      'actor',
-      'updated',
-      'actor',
-      '',
-    ];
+    const legacyRow = ['m-old', 'Legacy Member', 'regular', '', '+63 900 000 0000', '', '', '', '1', 'created', 'actor', 'updated', 'actor', ''];
 
     expect(headersMatch('members', legacyHeaders)).toBe(true);
     const member = rowToEntity<Member>('members', legacyRow);

@@ -4,12 +4,23 @@ import { createDemoSnapshot, createEmptySnapshot } from '../../domain/demoData';
 import { newId } from '../../domain/ids';
 import { nowISO } from '../../domain/dateUtils';
 import { bumpRevision, revisioned } from '../../domain/factory';
-import { assertTrackerSnapshot } from '../../domain/snapshotValidation';
+import { normalizeTrackerSnapshot } from '../../domain/snapshotValidation';
 import { ConflictError, type DomainCommand, type EntityType, type Revisioned, type SyncState, type TrackerSnapshot } from '../../domain/types';
 import type { ConnectResult, TrackerRepository } from '../TrackerRepository';
 
 type RevisionedStoreName =
-  'stages' | 'groups' | 'members' | 'memberMilestones' | 'weeks' | 'meetings' | 'campaigns' | 'campaignMetrics' | 'rivals' | 'events' | 'config';
+  | 'stages'
+  | 'groups'
+  | 'members'
+  | 'memberMilestones'
+  | 'weeks'
+  | 'meetings'
+  | 'campaigns'
+  | 'campaignSessions'
+  | 'campaignMetrics'
+  | 'rivals'
+  | 'events'
+  | 'config';
 
 const REVISIONED_STORE_BY_ENTITY: Partial<Record<EntityType, RevisionedStoreName>> = {
   config: 'config',
@@ -20,6 +31,7 @@ const REVISIONED_STORE_BY_ENTITY: Partial<Record<EntityType, RevisionedStoreName
   week: 'weeks',
   meeting: 'meetings',
   campaign: 'campaigns',
+  campaignSession: 'campaignSessions',
   campaignMetric: 'campaignMetrics',
   rival: 'rivals',
   event: 'events',
@@ -89,11 +101,11 @@ export class LocalTrackerRepository implements TrackerRepository {
   }
 
   async restoreSnapshot(snapshot: TrackerSnapshot): Promise<void> {
-    assertTrackerSnapshot(snapshot);
+    const normalized = normalizeTrackerSnapshot(snapshot);
     this.setState('saving');
     try {
       const db = await getDB();
-      await this._writeAll(db, snapshot);
+      await this._writeAll(db, normalized);
       this.setState('saved');
     } catch (err) {
       this.setState('error');
@@ -113,7 +125,7 @@ export class LocalTrackerRepository implements TrackerRepository {
     this.setState('saving');
     const db = await getDB();
     try {
-      if (command.entity.type === 'attendanceEvent') {
+      if (command.entity.type === 'attendanceEvent' || command.entity.type === 'campaignAttendanceEvent') {
         await this._appendAttendanceEvent(db, command);
       } else if (command.entity.type === 'media') {
         await this._applyMedia(db, command);
@@ -139,10 +151,11 @@ export class LocalTrackerRepository implements TrackerRepository {
   }
 
   private async _appendAttendanceEvent(db: IDBPDatabase<LocalSchema>, command: DomainCommand) {
-    if (command.op !== 'append') throw new Error('attendanceEvent only supports append');
-    const existing = await db.get('attendanceEvents', command.entity.id);
+    if (command.op !== 'append') throw new Error(`${command.entity.type} only supports append`);
+    const store = command.entity.type === 'campaignAttendanceEvent' ? 'campaignAttendanceEvents' : 'attendanceEvents';
+    const existing = await db.get(store, command.entity.id);
     if (existing) return; // dedupe retried event id
-    await db.add('attendanceEvents', { id: command.entity.id, ...(command.payload as object) } as never);
+    await db.add(store, { id: command.entity.id, ...(command.payload as object) } as never);
   }
 
   private async _applyMedia(db: IDBPDatabase<LocalSchema>, command: DomainCommand) {
@@ -180,24 +193,41 @@ export class LocalTrackerRepository implements TrackerRepository {
     const configs = await db.getAll('config');
     if (!configs.length) return null;
     const [meta] = await db.getAll('meta');
-    const [stages, groups, members, memberMilestones, weeks, meetings, attendanceEvents, campaigns, campaignMetrics, rivals, events, media, audit] =
-      await Promise.all([
-        db.getAll('stages'),
-        db.getAll('groups'),
-        db.getAll('members'),
-        db.getAll('memberMilestones'),
-        db.getAll('weeks'),
-        db.getAll('meetings'),
-        db.getAll('attendanceEvents'),
-        db.getAll('campaigns'),
-        db.getAll('campaignMetrics'),
-        db.getAll('rivals'),
-        db.getAll('events'),
-        db.getAll('media'),
-        db.getAll('audit'),
-      ]);
+    const [
+      stages,
+      groups,
+      members,
+      memberMilestones,
+      weeks,
+      meetings,
+      attendanceEvents,
+      campaigns,
+      campaignSessions,
+      campaignAttendanceEvents,
+      campaignMetrics,
+      rivals,
+      events,
+      media,
+      audit,
+    ] = await Promise.all([
+      db.getAll('stages'),
+      db.getAll('groups'),
+      db.getAll('members'),
+      db.getAll('memberMilestones'),
+      db.getAll('weeks'),
+      db.getAll('meetings'),
+      db.getAll('attendanceEvents'),
+      db.getAll('campaigns'),
+      db.getAll('campaignSessions'),
+      db.getAll('campaignAttendanceEvents'),
+      db.getAll('campaignMetrics'),
+      db.getAll('rivals'),
+      db.getAll('events'),
+      db.getAll('media'),
+      db.getAll('audit'),
+    ]);
     return {
-      meta: meta ?? { trackerId: newId(), schemaVersion: 1, spreadsheetId: null },
+      meta: meta ? { ...meta, schemaVersion: Math.max(2, meta.schemaVersion) } : { trackerId: newId(), schemaVersion: 2, spreadsheetId: null },
       config: configs[0],
       stages,
       groups,
@@ -207,6 +237,8 @@ export class LocalTrackerRepository implements TrackerRepository {
       meetings,
       attendanceEvents,
       campaigns,
+      campaignSessions,
+      campaignAttendanceEvents,
       campaignMetrics,
       rivals,
       events,
@@ -227,6 +259,8 @@ export class LocalTrackerRepository implements TrackerRepository {
       ['meetings', snap.meetings],
       ['attendanceEvents', snap.attendanceEvents],
       ['campaigns', snap.campaigns],
+      ['campaignSessions', snap.campaignSessions ?? []],
+      ['campaignAttendanceEvents', snap.campaignAttendanceEvents ?? []],
       ['campaignMetrics', snap.campaignMetrics],
       ['rivals', snap.rivals],
       ['events', snap.events],

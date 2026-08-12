@@ -50,6 +50,24 @@
   margin: 0 0 14px;
   font-weight: 600;
 }
+.retentionRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--stroke2);
+  color: var(--text2);
+  font-size: 12px;
+}
+.retentionRow:last-child {
+  border-bottom: 0;
+}
+.retentionRow strong {
+  color: var(--accent);
+  font-family: var(--font-display);
+  font-size: 20px;
+}
 
 .statPair {
   display: grid;

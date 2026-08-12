@@ -131,6 +131,38 @@ export interface Campaign extends Revisioned {
   end: string;
 }
 
+export type CampaignProgramKey = 'prayparations' | 'nls' | 'kgc' | 'light_up' | 'liv' | 'water_baptism';
+
+/**
+ * One concrete campaign offering. Multiple offerings can share a requirementKey:
+ * any one KGC or Light Up offering completes that requirement, while LIV uses one
+ * requirement key per required Sunday.
+ */
+export interface CampaignSession extends Revisioned {
+  id: ID;
+  campaignId: ID;
+  programKey: CampaignProgramKey;
+  requirementKey: string;
+  name: string;
+  dateStart: string;
+  dateEnd: string;
+  startTime: string | null;
+  endTime: string | null;
+  venue: string | null;
+  notes: string;
+}
+
+/** Append-only. Current session attendance is the latest event per (sessionId, memberId). */
+export interface CampaignAttendanceEvent {
+  id: ID;
+  campaignId: ID;
+  sessionId: ID;
+  memberId: ID;
+  action: 'checked_in' | 'checked_out';
+  actorId: string;
+  clientTimestamp: string;
+}
+
 export interface CampaignMetric extends Revisioned {
   id: ID;
   campaignId: ID;
@@ -206,6 +238,8 @@ export interface TrackerSnapshot {
   meetings: Meeting[];
   attendanceEvents: AttendanceEvent[];
   campaigns: Campaign[];
+  campaignSessions: CampaignSession[];
+  campaignAttendanceEvents: CampaignAttendanceEvent[];
   campaignMetrics: CampaignMetric[];
   rivals: Rival[];
   events: CampaignEvent[];
@@ -223,6 +257,8 @@ export type EntityType =
   | 'meeting'
   | 'attendanceEvent'
   | 'campaign'
+  | 'campaignSession'
+  | 'campaignAttendanceEvent'
   | 'campaignMetric'
   | 'rival'
   | 'event'

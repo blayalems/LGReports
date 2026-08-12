@@ -13,7 +13,7 @@ describe('AnalyticsPage', () => {
     await renderWithProviders(<AnalyticsPage />);
     expect(await screen.findByRole('heading', { name: 'Attendance trend' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Conversion funnel' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Pace to goal' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Qualification readiness' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Group performance' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /retention/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Cycle over cycle' })).toBeInTheDocument();

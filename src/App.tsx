@@ -22,7 +22,7 @@ const ROUTE_COMPONENTS: Record<string, (props: RouteComponentProps) => React.Rea
   dashboard: () => <DashboardPage />,
   report: (props) => <ReportPage params={props.params} />,
   members: () => <MembersPage />,
-  campaign: () => <CampaignPage />,
+  campaign: (props) => <CampaignPage params={props.params} />,
   events: () => <EventsPage />,
   analytics: () => <AnalyticsPage />,
   history: () => <HistoryPage />,

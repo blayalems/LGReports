@@ -2,8 +2,10 @@ import type {
   AttendanceEvent,
   AuditEntry,
   Campaign,
+  CampaignAttendanceEvent,
   CampaignEvent,
   CampaignMetric,
+  CampaignSession,
   Config,
   Group,
   MediaRecord,
@@ -166,6 +168,37 @@ function isCampaign(value: unknown): value is Campaign {
   return isRecord(value) && isRevisioned(value) && isString(value.id) && isString(value.name) && isString(value.start) && isString(value.end);
 }
 
+function isCampaignSession(value: unknown): value is CampaignSession {
+  return (
+    isRecord(value) &&
+    isRevisioned(value) &&
+    isString(value.id) &&
+    isString(value.campaignId) &&
+    ['prayparations', 'nls', 'kgc', 'light_up', 'liv', 'water_baptism'].includes(String(value.programKey)) &&
+    isString(value.requirementKey) &&
+    isString(value.name) &&
+    isString(value.dateStart) &&
+    isString(value.dateEnd) &&
+    isNullableString(value.startTime) &&
+    isNullableString(value.endTime) &&
+    isNullableString(value.venue) &&
+    isString(value.notes)
+  );
+}
+
+function isCampaignAttendanceEvent(value: unknown): value is CampaignAttendanceEvent {
+  return (
+    isRecord(value) &&
+    isString(value.id) &&
+    isString(value.campaignId) &&
+    isString(value.sessionId) &&
+    isString(value.memberId) &&
+    (value.action === 'checked_in' || value.action === 'checked_out') &&
+    isString(value.actorId) &&
+    isString(value.clientTimestamp)
+  );
+}
+
 function isCampaignMetric(value: unknown): value is CampaignMetric {
   return (
     isRecord(value) &&
@@ -252,6 +285,8 @@ export function isTrackerSnapshot(value: unknown): value is TrackerSnapshot {
     meetings: isArrayOf(value.meetings, isMeeting) ? value.meetings : null,
     attendanceEvents: isArrayOf(value.attendanceEvents, isAttendanceEvent) ? value.attendanceEvents : null,
     campaigns: isArrayOf(value.campaigns, isCampaign) ? value.campaigns : null,
+    campaignSessions: isArrayOf(value.campaignSessions, isCampaignSession) ? value.campaignSessions : null,
+    campaignAttendanceEvents: isArrayOf(value.campaignAttendanceEvents, isCampaignAttendanceEvent) ? value.campaignAttendanceEvents : null,
     campaignMetrics: isArrayOf(value.campaignMetrics, isCampaignMetric) ? value.campaignMetrics : null,
     rivals: isArrayOf(value.rivals, isRival) ? value.rivals : null,
     events: isArrayOf(value.events, isCampaignEvent) ? value.events : null,
@@ -264,4 +299,16 @@ export function isTrackerSnapshot(value: unknown): value is TrackerSnapshot {
 
 export function assertTrackerSnapshot(value: unknown): asserts value is TrackerSnapshot {
   if (!isTrackerSnapshot(value)) throw new TypeError('Invalid tracker backup');
+}
+
+/** Adds collections introduced after v1 before validating an imported backup. */
+export function normalizeTrackerSnapshot(value: unknown): TrackerSnapshot {
+  if (!isRecord(value)) throw new TypeError('Invalid tracker backup');
+  const normalized = {
+    ...value,
+    campaignSessions: Array.isArray(value.campaignSessions) ? value.campaignSessions : [],
+    campaignAttendanceEvents: Array.isArray(value.campaignAttendanceEvents) ? value.campaignAttendanceEvents : [],
+  };
+  assertTrackerSnapshot(normalized);
+  return normalized;
 }

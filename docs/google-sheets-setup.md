@@ -9,7 +9,7 @@ normal Google Drive sharing. The GitHub Pages site hosts only the public app she
 ## 1. Create the OAuth Client ID (overseer, once)
 
 The app talks to Google's APIs directly from the browser, so it needs a public OAuth
-*Client ID* (this is not a secret — every client-side OAuth app ships one).
+_Client ID_ (this is not a secret — every client-side OAuth app ships one).
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com/) → create a project
    (e.g. "Life Group Tracker").
@@ -19,7 +19,7 @@ The app talks to Google's APIs directly from the browser, so it needs a public O
    Add each leader's Google account under **Test users** (staying in "Testing" mode
    is fine for a small trusted team and avoids Google's verification review).
 4. **APIs & Services → Credentials → Create credentials → OAuth client ID** →
-   *Web application*. Under **Authorized JavaScript origins** add:
+   _Web application_. Under **Authorized JavaScript origins** add:
    - your GitHub Pages origin, e.g. `https://<owner>.github.io`
    - `http://localhost:5173` (local development)
 5. Copy the Client ID (`…apps.googleusercontent.com`).
@@ -50,6 +50,9 @@ loads from and saves to the shared workbook, re-syncing on focus and every minut
 - Every row carries a `revision`; if two leaders edit the same row at once, the
   second save is refused ("stale") instead of silently overwriting — refresh and retry.
 - Check-ins are an append-only log, so simultaneous check-ins never conflict.
+- Campaign sessions and named campaign check-ins use dedicated tabs. When an older,
+  otherwise valid tracker is linked, the app safely adds these missing tabs without
+  replacing its historical rows.
 - Writes use the Sheets `RAW` input mode, so text that looks like a formula
   (`=…`, `+…`) is stored as plain text and never executed.
 - Edits are attributed to the signed-in Google account in the workbook's `audit`
@@ -70,6 +73,7 @@ loads from and saves to the shared workbook, re-syncing on focus and every minut
   confirm the account is listed under OAuth consent screen → Test users.
 - **"Workbook isn't shared with this account"** — the overseer must share the
   spreadsheet (Editor) with exactly the Google account the leader signs in with.
-- **"Workbook columns were changed by hand"** — someone edited the header row or
-  deleted a tab in the Sheets UI. Restore the header names (row 1) to match the
-  app's schema; row *data* edits in the sheet are fine and sync into the app.
+- **"Workbook columns were changed by hand"** — someone edited an existing header
+  row or deleted a previously provisioned tab in the Sheets UI. Restore the header
+  names (row 1) to match the app's schema; row _data_ edits are fine and sync into
+  the app. Newly introduced app tabs are provisioned automatically for older trackers.

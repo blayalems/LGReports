@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Dialog } from '../../components/ui/Dialog';
-import { nowISO } from '../../domain/dateUtils';
+import { nowISO, todayISO } from '../../domain/dateUtils';
 import { newId } from '../../domain/ids';
 import { avatarColor, currentAttendeeIds, groupName, initials, meetingAttendance, notDeleted } from '../../domain/selectors';
 import type { Meeting, Member } from '../../domain/types';
@@ -49,7 +49,7 @@ export function CheckinDialog({ meeting, onClose }: { meeting: Meeting; onClose:
     });
   };
 
-  const addNewMember = async () => {
+  const addNewMember = async (status: 'vip' | 'regular') => {
     const name = query.trim();
     const memberId = newId();
     await dispatch({
@@ -57,7 +57,7 @@ export function CheckinDialog({ meeting, onClose }: { meeting: Meeting; onClose:
       op: 'create',
       payload: {
         name,
-        status: 'regular',
+        status,
         groupId: meeting.groupId,
         phone: '',
         address: '',
@@ -73,8 +73,10 @@ export function CheckinDialog({ meeting, onClose }: { meeting: Meeting; onClose:
       payload: { meetingId: meeting.id, memberId, action: 'checked_in', actorId, clientTimestamp: nowISO() },
     });
     setQuery('');
-    showToast(`${name} added and checked in`, 'success');
+    showToast(`${name} added as ${status === 'vip' ? 'VIP' : 'regular'} and checked in`, 'success');
   };
+
+  const campaignTracking = notDeleted(snapshot.campaigns).some((campaign) => campaign.end >= todayISO());
 
   const setGuests = (delta: number) => {
     const next = Math.max(0, (meeting.guestCount || 0) + delta);
@@ -119,16 +121,13 @@ export function CheckinDialog({ meeting, onClose }: { meeting: Meeting; onClose:
         </div>
       }
     >
-      <p className={styles.hint}>Tap members who attended · total updates automatically</p>
+      <p className={styles.hint}>Tap named people who attended · total updates automatically</p>
+      {campaignTracking && (
+        <p className={styles.campaignNotice}>Anonymous guests cannot accumulate KGC or Light Up qualification until they are added as a named person.</p>
+      )}
       <label>
         <span className="visually-hidden">Search or add a member</span>
-        <input
-          type="search"
-          className={styles.search}
-          placeholder="Search or add a member…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
+        <input type="search" className={styles.search} placeholder="Search or add a member…" value={query} onChange={(e) => setQuery(e.target.value)} />
       </label>
       <ul className={styles.list}>
         {members.map((m) => {
@@ -144,7 +143,16 @@ export function CheckinDialog({ meeting, onClose }: { meeting: Meeting; onClose:
                   <span className={styles.memberSub}>{groupName(snapshot, m.groupId) || 'No group'}</span>
                 </span>
                 <span className={styles.check} aria-hidden="true">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round">
+                  <svg
+                    width="13"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="3.4"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
                     <path d="M4 12.5 10 18 20 6" />
                   </svg>
                 </span>
@@ -154,12 +162,17 @@ export function CheckinDialog({ meeting, onClose }: { meeting: Meeting; onClose:
         })}
         {canAdd && (
           <li>
-            <button type="button" className={styles.addNew} onClick={() => void addNewMember()}>
-              <span className={styles.addNewBadge} aria-hidden="true">
-                +
-              </span>
-              Add “{query.trim()}” as a new member
-            </button>
+            <div className={styles.addChoices}>
+              <button type="button" className={styles.addNew} onClick={() => void addNewMember('vip')}>
+                <span className={styles.addNewBadge} aria-hidden="true">
+                  +
+                </span>
+                Add “{query.trim()}” as VIP &amp; check in
+              </button>
+              <button type="button" className={styles.addRegular} onClick={() => void addNewMember('regular')}>
+                Add as regular instead
+              </button>
+            </div>
           </li>
         )}
       </ul>

@@ -1,19 +1,18 @@
 import { BarChart } from '../../components/charts/BarChart';
 import { Card, CardButton } from '../../components/ui/Card';
-import { ProgressBar } from '../../components/ui/ProgressBar';
 import { StatTile } from '../../components/ui/StatTile';
-import { daysBetween, formatDate, parseISODate, sundayOf, weekLabelFor } from '../../domain/dateUtils';
+import { daysBetween, formatDate, parseISODate, sundayOf, todayISO, weekLabelFor } from '../../domain/dateUtils';
 import {
   activeCampaign,
   avatarColor,
-  campaignOverallPct,
+  campaignQualifications,
+  campaignSessionsFor,
   currentWeek,
   followUpQueue,
   initials,
   meetingAttendance,
   meetingsForWeek,
   notDeleted,
-  stageProgress,
   upcomingBirthdays,
   upcomingEvents,
   weeksChrono,
@@ -81,9 +80,16 @@ export default function DashboardPage() {
   const members = notDeleted(snapshot.members);
   const vips = members.filter((m) => m.status === 'vip').length;
 
-  const campaign = activeCampaign(snapshot);
-  const progress = campaign ? stageProgress(snapshot, campaign.id) : [];
-  const cyclePct = campaign ? Math.round(campaignOverallPct(progress) * 100) : null;
+  const campaign =
+    activeCampaign(snapshot) ??
+    notDeleted(snapshot.campaigns)
+      .filter((row) => row.start > todayISO())
+      .sort((a, b) => a.start.localeCompare(b.start))[0];
+  const campaignStates = campaign ? campaignQualifications(snapshot, campaign) : [];
+  const kgcEligible = campaignStates.filter((state) => state.kgcEligible && !state.kgcCompleted).length;
+  const lightUpReady = campaignStates.filter((state) => state.lightUpEligible && !state.lightUpCompleted).length;
+  const blockedByKgc = campaignStates.filter((state) => state.actionKey === 'blocked_by_kgc').length;
+  const nextCampaignSession = campaign ? campaignSessionsFor(snapshot, campaign.id).find((session) => session.dateStart >= todayISO()) : undefined;
 
   const bars = chrono.slice(-6).map((wk) => ({ label: wk.label, value: weekTotal(snapshot, wk.id) }));
   const queue = followUpQueue(snapshot);
@@ -113,10 +119,10 @@ export default function DashboardPage() {
           <StatTile label="This week" value={total} delta={deltaBadge} sub="total attendance · vs last week" />
           <StatTile label="Life groups" value={groups.length} sub={`${activeGroups} met this week`} />
           <StatTile label="Members" value={members.length} sub={`${vips} VIP${vips === 1 ? '' : 's'} in the pipeline`} />
-          <CardButton className={styles.campaignTile} onClick={() => navigate('/campaign')}>
+          <CardButton className={styles.campaignTile} onClick={() => navigate('/campaign/kgc_eligible')}>
             <div className={styles.tileKicker}>{campaign?.name ?? 'Campaign'}</div>
-            <div className={styles.tileValue}>{cyclePct == null ? '—' : `${cyclePct}%`}</div>
-            <div className={styles.tileSub}>{campaign ? 'overall goal progress · open campaign' : 'No campaign yet — tap to create one'}</div>
+            <div className={styles.tileValue}>{campaign ? kgcEligible : '—'}</div>
+            <div className={styles.tileSub}>{campaign ? 'KGC eligible now · open queue' : 'No campaign yet — tap to create one'}</div>
           </CardButton>
         </div>
 
@@ -137,14 +143,14 @@ export default function DashboardPage() {
 
           <Card>
             <div className={styles.cardHead}>
-              <h2 className={styles.cardTitle}>Follow-up queue</h2>
+              <h2 className={styles.cardTitle}>Pastoral follow-up</h2>
               <button type="button" className={`pressable ${styles.pillLink}`} onClick={() => navigate('/members')}>
                 All members
               </button>
             </div>
             {queue.length > 0 ? (
-              <ul className={styles.queueList} style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-                {queue.slice(0, 6).map((f) => {
+              <ul className={styles.queueList}>
+                {queue.slice(0, 3).map((f) => {
                   const tag = TAG_COLORS[f.tag];
                   return (
                     <li key={f.member.id}>
@@ -153,12 +159,8 @@ export default function DashboardPage() {
                           {initials(f.member.name)}
                         </span>
                         <span className={styles.queueBody}>
-                          <span className={styles.queueName} style={{ display: 'block' }}>
-                            {f.member.name}
-                          </span>
-                          <span className={styles.queueSub} style={{ display: 'block' }}>
-                            {followUpSub(f)}
-                          </span>
+                          <span className={styles.queueName}>{f.member.name}</span>
+                          <span className={styles.queueSub}>{followUpSub(f)}</span>
                         </span>
                         <span className={styles.tag} style={{ color: tag.color, background: tag.bg }}>
                           {f.tag}
@@ -169,40 +171,45 @@ export default function DashboardPage() {
                 })}
               </ul>
             ) : (
-              <div className={styles.allClear}>
-                <div className={styles.mark} aria-hidden="true">
-                  ✓
-                </div>
-                Everyone's been checked in recently. Great shepherding!
-              </div>
+              <p className={styles.quietNote}>Everyone has checked in recently.</p>
             )}
           </Card>
         </div>
 
         <div className={styles.row} style={{ marginBottom: 0 }}>
-          <Card>
+          <Card className={styles.cycleFocus}>
             <div className={styles.cardHead}>
-              <h2 className={styles.cardTitle}>{campaign ? `${campaign.name} goals` : 'Campaign goals'}</h2>
+              <div>
+                <h2 className={styles.cardTitle}>Campaign focus</h2>
+                {campaign && (
+                  <p className={styles.focusNext}>
+                    {nextCampaignSession
+                      ? `Next: ${nextCampaignSession.name} · ${formatDate(nextCampaignSession.dateStart, { month: 'short', day: 'numeric' })}`
+                      : 'No remaining scheduled milestone'}
+                  </p>
+                )}
+              </div>
               <button type="button" className={`pressable ${styles.pillLink}`} onClick={() => navigate('/campaign')}>
-                Open campaign
+                Full Action Queue
               </button>
             </div>
-            {campaign && progress.length > 0 ? (
-              <div className={styles.stageList}>
-                {progress.map((sp) => (
-                  <div key={sp.stage.id}>
-                    <div className={styles.stageTop}>
-                      <span className={styles.stageName}>{sp.stage.label}</span>
-                      <span className={styles.stageNums}>
-                        <strong>{sp.actual}</strong> / {sp.goal}
-                      </span>
-                    </div>
-                    <ProgressBar actual={sp.actual} goal={sp.goal} label={`${sp.stage.label}: ${sp.actual} of ${sp.goal}`} />
-                  </div>
-                ))}
+            {campaign ? (
+              <div className={styles.focusGrid}>
+                <button type="button" onClick={() => navigate('/campaign/kgc_eligible')}>
+                  <strong>{kgcEligible}</strong>
+                  <span>KGC eligible</span>
+                </button>
+                <button type="button" onClick={() => navigate('/campaign/light_up_ready')}>
+                  <strong>{lightUpReady}</strong>
+                  <span>Light Up ready</span>
+                </button>
+                <button type="button" onClick={() => navigate('/campaign/blocked_by_kgc')}>
+                  <strong>{blockedByKgc}</strong>
+                  <span>KGC-only blockers</span>
+                </button>
               </div>
             ) : (
-              <p className={styles.quietNote}>No campaign yet — set up your first cycle from the Campaign screen.</p>
+              <p className={styles.quietNote}>Set up the official Cycle 6 schedule from Campaign.</p>
             )}
           </Card>
 

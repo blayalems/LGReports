@@ -19,6 +19,8 @@ describe('sheets schema', () => {
     expect(parsed.weeks).toEqual(snapshot.weeks);
     expect(parsed.meetings).toEqual(snapshot.meetings);
     expect(parsed.campaigns).toEqual(snapshot.campaigns);
+    expect(parsed.campaignSessions).toEqual(snapshot.campaignSessions);
+    expect(parsed.campaignAttendanceEvents).toEqual(snapshot.campaignAttendanceEvents);
     expect(parsed.campaignMetrics).toEqual(snapshot.campaignMetrics);
     expect(parsed.events).toEqual(snapshot.events);
 

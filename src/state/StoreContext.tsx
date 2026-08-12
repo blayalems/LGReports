@@ -40,6 +40,7 @@ function currentRevision(snapshot: TrackerSnapshot | null, type: EntityType, id:
     week: snapshot.weeks,
     meeting: snapshot.meetings,
     campaign: snapshot.campaigns,
+    campaignSession: snapshot.campaignSessions,
     campaignMetric: snapshot.campaignMetrics,
     rival: snapshot.rivals,
     event: snapshot.events,
@@ -63,7 +64,15 @@ export function StoreProvider({
   const [dismissedFirstRun, setDismissedFirstRun] = useState(false);
   const queueRef = useRef<Promise<unknown>>(Promise.resolve());
   const snapshotRef = useRef<TrackerSnapshot | null>(null);
+  const mountedRef = useRef(true);
   const announce = useAnnounce();
+
+  useEffect(
+    () => () => {
+      mountedRef.current = false;
+    },
+    [],
+  );
 
   useEffect(() => repository.onSyncStateChange(setSyncState), [repository]);
 
@@ -88,8 +97,10 @@ export function StoreProvider({
 
   const refresh = useCallback(async () => {
     const snap = await repository.refresh();
-    snapshotRef.current = snap;
-    setSnapshot(snap);
+    if (mountedRef.current) {
+      snapshotRef.current = snap;
+      setSnapshot(snap);
+    }
   }, [repository]);
 
   // Remote source of truth: re-fetch when the tab regains focus and every 60s while
@@ -114,9 +125,7 @@ export function StoreProvider({
       const run = async () => {
         const latestRevision = currentRevision(snapshotRef.current, partial.entity.type, partial.entity.id);
         const baseRevision =
-          partial.baseRevision !== undefined && latestRevision !== undefined && latestRevision > partial.baseRevision
-            ? latestRevision
-            : partial.baseRevision;
+          partial.baseRevision !== undefined && latestRevision !== undefined && latestRevision > partial.baseRevision ? latestRevision : partial.baseRevision;
         const command: DomainCommand = {
           commandId: newId(),
           actorId,
@@ -128,6 +137,9 @@ export function StoreProvider({
           await repository.saveCommand(command);
           await refresh();
         } catch (err) {
+          // An app/provider teardown can close the repository while a fire-and-forget
+          // UI command is finishing. There is no mounted surface left to announce to.
+          if (!mountedRef.current) return;
           announce(`Couldn't save that change. ${err instanceof Error ? err.message : ''}`, 'assertive');
           throw err;
         }

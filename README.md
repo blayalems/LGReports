@@ -64,9 +64,24 @@ The public OAuth Client ID can be supplied as the repository Actions variable
 - Start a Sunday reporting week and prefill one row per group.
 - Check members in, attach a meeting photo, validate, submit, reopen, print, or
   export the weekly report.
-- Track campaign goals, weekly VIPs, network growth, and event attendance goals
-  and actuals per leader, with calculated network totals.
+- Apply the editable official Cycle 6 schedule and use named attendance to derive
+  KGC, Light Up, Living in Victory, and Water Baptism readiness.
+- Work a person-level campaign Action Queue with KGC/Light Up blockers, deadlines,
+  session check-in, leader accountability, and weekly progress.
+- Keep campaign goals editable while eligible person-level actuals derive from the
+  underlying attendance records instead of duplicated manual totals.
 - Review trends, previous weeks, audit history, birthdays, and follow-up needs.
 - Customize church details, theme, accent, stages, statuses, and backups.
 
 No real member or church data is committed to this repository.
+
+## Cycle 6 qualification rules
+
+- Knowing God Class: at least two named Life Group attendances; one KGC offering completes it.
+- Light Up Retreat: at least three named Life Group attendances plus completed KGC.
+- Living in Victory: completed Light Up plus one class on each required Sunday (2/2).
+- Water Baptism: completed Light Up; LIV completion is not a prerequisite.
+- New Life Sunday and Beginning Your New Life remain campaign practices, not gates.
+
+Anonymous guest totals never create personal qualification. Existing legacy campaign
+milestones remain readable, and older backups load with empty session collections.

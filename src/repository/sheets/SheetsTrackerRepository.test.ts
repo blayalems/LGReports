@@ -16,7 +16,11 @@ class FakeSheetsServer {
   spreadsheetId = 'fake-spreadsheet-1';
 
   seed(values: Record<TabName, string[][]>) {
-    for (const tab of ALL_TABS) this.tabs.set(tab, values[tab].map((r) => [...r]));
+    for (const tab of ALL_TABS)
+      this.tabs.set(
+        tab,
+        values[tab].map((r) => [...r]),
+      );
   }
 
   private parseRange(range: string): { tab: string; r1: number | null; r2: number | null } {
@@ -53,12 +57,24 @@ class FakeSheetsServer {
         sheets: [...this.tabs.keys()].map((title) => ({ properties: { title } })),
       });
     }
+    // POST /v4/spreadsheets/<id>:batchUpdate (add missing compatibility tabs)
+    if (path === `/v4/spreadsheets/${this.spreadsheetId}:batchUpdate` && init?.method === 'POST') {
+      const requests = (body.requests as { addSheet?: { properties?: { title?: string } } }[]) ?? [];
+      for (const request of requests) {
+        const title = request.addSheet?.properties?.title;
+        if (title && !this.tabs.has(title)) this.tabs.set(title, []);
+      }
+      return Response.json({});
+    }
     // POST .../values:batchUpdate
     if (path.endsWith('/values:batchUpdate')) {
       const data = (body.data as { range: string; values: string[][] }[]) ?? [];
       for (const d of data) {
         const { tab } = this.parseRange(d.range);
-        this.tabs.set(tab, d.values.map((r) => [...r]));
+        this.tabs.set(
+          tab,
+          d.values.map((r) => [...r]),
+        );
       }
       return Response.json({});
     }
@@ -182,7 +198,9 @@ describe('SheetsTrackerRepository', () => {
     const repo = makeRepo();
     await repo.loadSnapshot();
 
-    await repo.saveCommand(cmd({ entity: { type: 'group', id: 'g-new' }, op: 'create', payload: { name: 'Newbie', category: 'open', location: '', weeklyTarget: null } }));
+    await repo.saveCommand(
+      cmd({ entity: { type: 'group', id: 'g-new' }, op: 'create', payload: { name: 'Newbie', category: 'open', location: '', weeklyTarget: null } }),
+    );
     let snap = await repo.refresh();
     const created = snap.groups.find((g) => g.id === 'g-new')!;
     expect(created.name).toBe('Newbie');
@@ -206,6 +224,21 @@ describe('SheetsTrackerRepository', () => {
     await repo.saveCommand(command); // retry
     const after = await repo.refresh();
     expect(after.attendanceEvents.filter((e) => e.id === 'evt-1')).toHaveLength(1);
+  });
+
+  it('provisions new campaign tabs on an otherwise valid legacy workbook', async () => {
+    const values = workbookValues(createDemoSnapshot('actor-1'));
+    for (const tab of ALL_TABS) {
+      if (tab !== 'campaignSessions' && tab !== 'campaignAttendanceEvents')
+        server.tabs.set(
+          tab,
+          values[tab].map((row) => [...row]),
+        );
+    }
+    const client = new SheetsClient(() => auth.getToken(false));
+    await expect(validateWorkbook(client, server.spreadsheetId)).resolves.toEqual({ ok: true });
+    expect(server.tabs.get('campaignSessions')?.[0]).toContain('requirementKey');
+    expect(server.tabs.get('campaignAttendanceEvents')?.[0]).toContain('sessionId');
   });
 
   it('rejects linking a non-tracker spreadsheet', async () => {

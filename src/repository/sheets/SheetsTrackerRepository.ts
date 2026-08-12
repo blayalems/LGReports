@@ -7,6 +7,7 @@ import type { ConnectResult, TrackerRepository } from '../TrackerRepository';
 import {
   ALL_TABS,
   entityToRow,
+  headersFor,
   headersMatch,
   parseWorkbook,
   rowRange,
@@ -32,6 +33,7 @@ const TAB_BY_ENTITY: Record<string, TabName> = {
   week: 'weeks',
   meeting: 'meetings',
   campaign: 'campaigns',
+  campaignSession: 'campaignSessions',
   campaignMetric: 'campaignMetrics',
   rival: 'rivals',
   event: 'events',
@@ -152,7 +154,7 @@ export class SheetsTrackerRepository implements TrackerRepository {
       // says who did what — the whole point of a multi-leader workbook.
       const actorId = this.auth.getEmail() ?? command.actorId;
 
-      if (command.entity.type === 'attendanceEvent') {
+      if (command.entity.type === 'attendanceEvent' || command.entity.type === 'campaignAttendanceEvent') {
         await this.appendAttendanceEvent({ ...command, actorId });
       } else {
         const tab = TAB_BY_ENTITY[command.entity.type];
@@ -190,12 +192,15 @@ export class SheetsTrackerRepository implements TrackerRepository {
   }
 
   private async appendAttendanceEvent(command: DomainCommand): Promise<void> {
-    if (command.op !== 'append') throw new Error('attendanceEvent only supports append');
+    if (command.op !== 'append') throw new Error(`${command.entity.type} only supports append`);
     const id = command.entity.id;
-    const known = this.appendedEventIds.has(id) || this.cache?.snapshot.attendanceEvents.some((e) => e.id === id);
+    const isCampaign = command.entity.type === 'campaignAttendanceEvent';
+    const collection = isCampaign ? this.cache?.snapshot.campaignAttendanceEvents : this.cache?.snapshot.attendanceEvents;
+    const tab: TabName = isCampaign ? 'campaignAttendanceEvents' : 'attendanceEvents';
+    const known = this.appendedEventIds.has(id) || collection?.some((e) => e.id === id);
     if (known) return; // retried command — already durable
-    const row = entityToRow('attendanceEvents', { id, ...(command.payload as object), actorId: command.actorId });
-    await this.client.appendRow(this.spreadsheetId, 'attendanceEvents', row);
+    const row = entityToRow(tab, { id, ...(command.payload as object), actorId: command.actorId });
+    await this.client.appendRow(this.spreadsheetId, tab, row);
     this.appendedEventIds.add(id);
   }
 
@@ -247,8 +252,17 @@ export async function validateWorkbook(client: SheetsClient, spreadsheetId: stri
   if (missing.length === ALL_TABS.length) {
     return { ok: false, reason: 'wrong-schema', message: 'That spreadsheet is not a Life Group Tracker workbook. Use "Create new workbook" instead.' };
   }
+  const compatibleAdditions: TabName[] = ['campaignSessions', 'campaignAttendanceEvents'];
+  const missingRequired = missing.filter((tab) => !compatibleAdditions.includes(tab));
+  if (missingRequired.length > 0) {
+    return { ok: false, reason: 'wrong-schema', message: `Workbook is missing tabs: ${missingRequired.join(', ')}` };
+  }
   if (missing.length > 0) {
-    return { ok: false, reason: 'wrong-schema', message: `Workbook is missing tabs: ${missing.join(', ')}` };
+    await client.addSheets(spreadsheetId, missing);
+    await client.batchUpdateValues(
+      spreadsheetId,
+      missing.map((tab) => ({ range: `'${tab}'!A1`, values: [headersFor(tab)] })),
+    );
   }
   const headerRanges = ALL_TABS.map((tab) => `'${tab}'!1:1`);
   const headerRows = await client.batchGet(spreadsheetId, headerRanges);

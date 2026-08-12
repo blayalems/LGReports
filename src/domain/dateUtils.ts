@@ -16,10 +16,15 @@ export function toISODate(d: Date): string {
 
 export function parseISODate(s: string | null | undefined): Date | null {
   if (!s) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
   const parts = s.split('-').map(Number);
-  if (parts.length !== 3 || parts.some(Number.isNaN)) return null;
+  if (parts.some(Number.isNaN)) return null;
   const [y, m, dd] = parts;
-  return new Date(y, m - 1, dd);
+  const date = new Date(y, m - 1, dd);
+  // JavaScript normalizes invalid dates such as 2026-02-31 into March. Reject
+  // those values so campaign ranges and event filters cannot silently drift.
+  if (date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== dd) return null;
+  return date;
 }
 
 export function weekLabelFor(sunday: Date): string {

@@ -11,8 +11,10 @@ import type {
   AttendanceEvent,
   AuditEntry,
   Campaign,
+  CampaignAttendanceEvent,
   CampaignEvent,
   CampaignMetric,
+  CampaignSession,
   Config,
   Group,
   MediaRecord,
@@ -25,7 +27,7 @@ import type {
   Week,
 } from '../../domain/types';
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 type FieldKind = 'string' | 'stringOrNull' | 'number' | 'numberOrNull' | 'boolean' | 'json';
 
@@ -100,6 +102,21 @@ export const TAB_SPECS = {
   ],
   attendanceEvents: [f('id'), f('meetingId'), f('memberId'), f('action'), f('actorId'), f('clientTimestamp')],
   campaigns: [f('id'), f('name'), f('start'), f('end'), ...REVISIONED],
+  campaignSessions: [
+    f('id'),
+    f('campaignId'),
+    f('programKey'),
+    f('requirementKey'),
+    f('name'),
+    f('dateStart'),
+    f('dateEnd'),
+    f('startTime', 'stringOrNull'),
+    f('endTime', 'stringOrNull'),
+    f('venue', 'stringOrNull'),
+    f('notes'),
+    ...REVISIONED,
+  ],
+  campaignAttendanceEvents: [f('id'), f('campaignId'), f('sessionId'), f('memberId'), f('action'), f('actorId'), f('clientTimestamp')],
   campaignMetrics: [
     f('id'),
     f('campaignId'),
@@ -151,6 +168,8 @@ export const TAB_BY_COLLECTION: Record<TabName, keyof TrackerSnapshot | null> = 
   meetings: 'meetings',
   attendanceEvents: 'attendanceEvents',
   campaigns: 'campaigns',
+  campaignSessions: 'campaignSessions',
+  campaignAttendanceEvents: 'campaignAttendanceEvents',
   campaignMetrics: 'campaignMetrics',
   rivals: 'rivals',
   events: 'events',
@@ -255,7 +274,7 @@ export function parseWorkbook(valuesByTab: Partial<Record<TabName, (string | und
   if (!configs.length) throw new Error('Workbook has no config row');
 
   const snapshot: TrackerSnapshot = {
-    meta: { trackerId: meta.trackerId, schemaVersion: meta.schemaVersion, spreadsheetId: null },
+    meta: { trackerId: meta.trackerId, schemaVersion: Math.max(SCHEMA_VERSION, meta.schemaVersion), spreadsheetId: null },
     config: configs[0],
     stages: parseTab<Stage>('stages', valuesByTab.stages),
     groups: parseTab<Group>('groups', valuesByTab.groups),
@@ -265,6 +284,8 @@ export function parseWorkbook(valuesByTab: Partial<Record<TabName, (string | und
     meetings: parseTab<Meeting>('meetings', valuesByTab.meetings),
     attendanceEvents: parseTab<AttendanceEvent>('attendanceEvents', valuesByTab.attendanceEvents),
     campaigns: parseTab<Campaign>('campaigns', valuesByTab.campaigns),
+    campaignSessions: parseTab<CampaignSession>('campaignSessions', valuesByTab.campaignSessions),
+    campaignAttendanceEvents: parseTab<CampaignAttendanceEvent>('campaignAttendanceEvents', valuesByTab.campaignAttendanceEvents),
     campaignMetrics: parseTab<CampaignMetric>('campaignMetrics', valuesByTab.campaignMetrics),
     rivals: parseTab<Rival>('rivals', valuesByTab.rivals),
     events: parseTab<CampaignEvent>('events', valuesByTab.events),
@@ -299,6 +320,8 @@ export function workbookValues(snapshot: TrackerSnapshot): Record<TabName, strin
     meetings: rowsFor('meetings', snapshot.meetings as unknown as Record<string, unknown>[]),
     attendanceEvents: rowsFor('attendanceEvents', snapshot.attendanceEvents as unknown as Record<string, unknown>[]),
     campaigns: rowsFor('campaigns', snapshot.campaigns as unknown as Record<string, unknown>[]),
+    campaignSessions: rowsFor('campaignSessions', snapshot.campaignSessions as unknown as Record<string, unknown>[]),
+    campaignAttendanceEvents: rowsFor('campaignAttendanceEvents', snapshot.campaignAttendanceEvents as unknown as Record<string, unknown>[]),
     campaignMetrics: rowsFor('campaignMetrics', snapshot.campaignMetrics as unknown as Record<string, unknown>[]),
     rivals: rowsFor('rivals', snapshot.rivals as unknown as Record<string, unknown>[]),
     events: rowsFor('events', snapshot.events as unknown as Record<string, unknown>[]),

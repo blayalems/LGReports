@@ -1,6 +1,5 @@
 import { CycleCompareChart } from '../../components/charts/CycleCompareChart';
 import { FunnelChart } from '../../components/charts/FunnelChart';
-import { PaceRow, type PaceState } from '../../components/charts/PaceRow';
 import { TrendChart } from '../../components/charts/TrendChart';
 import { Card } from '../../components/ui/Card';
 import { ProgressBar } from '../../components/ui/ProgressBar';
@@ -8,13 +7,14 @@ import { StatTile } from '../../components/ui/StatTile';
 import {
   activeCampaign,
   atRiskMembers,
-  campaignTimePct,
+  campaignQualifications,
   leaderAverages,
   notDeleted,
   stageProgress,
   weeksChrono,
   weekTotal,
 } from '../../domain/selectors';
+import { useRouter } from '../../router/HashRouter';
 import { useTracker } from '../../state/StoreContext';
 import styles from './AnalyticsPage.module.css';
 
@@ -26,6 +26,7 @@ const TREND_META = {
 
 export default function AnalyticsPage() {
   const { snapshot } = useTracker();
+  const { navigate } = useRouter();
   if (!snapshot) return null;
 
   // Attendance trend: weekly totals + trailing 4-week average.
@@ -54,18 +55,23 @@ export default function AnalyticsPage() {
   // Campaign-derived sections.
   const campaign = activeCampaign(snapshot);
   const progress = campaign ? stageProgress(snapshot, campaign.id) : [];
-  const elapsed = campaign ? campaignTimePct(campaign) : 0;
+  const campaignStates = campaign ? campaignQualifications(snapshot, campaign) : [];
   const funnelStages = progress.map((sp, i) => {
     const prev = progress[i - 1];
     const dropLabel = prev && prev.actual > 0 && i > 0 ? `· ${Math.round((sp.actual / prev.actual) * 100)}% of previous` : undefined;
     return { label: sp.stage.label, count: sp.actual, dropLabel };
   });
-  const paceRows = progress.map((sp) => {
-    const actualPct = sp.goal > 0 ? sp.actual / sp.goal : 0;
-    const state: PaceState = actualPct >= elapsed + 0.05 ? 'ahead' : actualPct <= elapsed - 0.05 ? 'behind' : 'on-track';
-    return { label: sp.stage.label, actualPct, state };
-  });
-  const aheadCount = paceRows.filter((p) => p.state === 'ahead').length;
+  const readinessRows = [
+    { label: 'KGC eligible now', filter: 'kgc_eligible', count: campaignStates.filter((state) => state.kgcEligible && !state.kgcCompleted).length },
+    { label: 'Blocked only by KGC', filter: 'blocked_by_kgc', count: campaignStates.filter((state) => state.actionKey === 'blocked_by_kgc').length },
+    { label: 'Light Up ready', filter: 'light_up_ready', count: campaignStates.filter((state) => state.lightUpEligible && !state.lightUpCompleted).length },
+    { label: 'LIV incomplete', filter: 'liv_incomplete', count: campaignStates.filter((state) => state.lightUpCompleted && !state.livCompleted).length },
+    {
+      label: 'Water Baptism ready',
+      filter: 'baptism_ready',
+      count: campaignStates.filter((state) => state.waterBaptismEligible && !state.waterBaptismCompleted).length,
+    },
+  ];
 
   // Group performance (comparison bars are relative to the best-performing group).
   const averages = leaderAverages(snapshot);
@@ -99,11 +105,7 @@ export default function AnalyticsPage() {
           <Card className={styles.fullWidth}>
             <h2 className={styles.cardTitle}>Attendance trend</h2>
             <p className={styles.insight}>{trendInsight}</p>
-            {trendData.length > 0 ? (
-              <TrendChart title="Attendance trend" data={trendData} />
-            ) : (
-              <p className={styles.quietNote}>No data yet.</p>
-            )}
+            {trendData.length > 0 ? <TrendChart title="Attendance trend" data={trendData} /> : <p className={styles.quietNote}>No data yet.</p>}
           </Card>
 
           <Card>
@@ -117,14 +119,13 @@ export default function AnalyticsPage() {
           </Card>
 
           <Card>
-            <h2 className={styles.cardTitle}>Pace to goal</h2>
-            <p className={styles.insight}>
-              {campaign
-                ? `${aheadCount} of ${paceRows.length} milestones ahead of pace, with ${Math.round(elapsed * 100)}% of the cycle elapsed.`
-                : 'No active campaign.'}
-            </p>
-            {paceRows.map((p) => (
-              <PaceRow key={p.label} label={p.label} actualPct={p.actualPct} expectedPct={elapsed} state={p.state} />
+            <h2 className={styles.cardTitle}>Qualification readiness</h2>
+            <p className={styles.insight}>{campaign ? 'Person-level queues replace linear time-vs-total pacing.' : 'No active campaign.'}</p>
+            {readinessRows.map((row) => (
+              <button key={row.label} type="button" className={styles.retentionRow} onClick={() => navigate(`/campaign/${row.filter}`)}>
+                <span>{row.label}</span>
+                <strong>{row.count} →</strong>
+              </button>
             ))}
           </Card>
 

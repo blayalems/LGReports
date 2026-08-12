@@ -3,7 +3,7 @@ import { Dialog } from '../../components/ui/Dialog';
 import { DraftNumberInput } from '../../components/ui/DraftNumberInput';
 import { nowISO, todayISO } from '../../domain/dateUtils';
 import { newId } from '../../domain/ids';
-import { avatarColor, initials, notDeleted } from '../../domain/selectors';
+import { activeCampaign, avatarColor, campaignQualification, initials, notDeleted } from '../../domain/selectors';
 import type { Member, MemberStatus } from '../../domain/types';
 import { showToast } from '../../hooks/useToast';
 import { useTracker } from '../../state/StoreContext';
@@ -64,6 +64,12 @@ export function MemberDialog({ member, onClose }: { member: Member; onClose: () 
   const groups = notDeleted(snapshot.groups);
   const stages = notDeleted(snapshot.stages).sort((a, b) => a.order - b.order);
   const milestones = notDeleted(snapshot.memberMilestones).filter((ms) => ms.memberId === member.id);
+  const focusCampaign =
+    activeCampaign(snapshot) ??
+    notDeleted(snapshot.campaigns)
+      .filter((campaign) => campaign.start > todayISO())
+      .sort((a, b) => a.start.localeCompare(b.start))[0];
+  const qualification = focusCampaign ? campaignQualification(snapshot, focusCampaign, member) : null;
 
   const update = (payload: Partial<Member>) => {
     const run = async () => {
@@ -257,7 +263,58 @@ export function MemberDialog({ member, onClose }: { member: Member; onClose: () 
         />
       </label>
 
-      <span className={styles.fieldLabel}>Journey milestones</span>
+      {qualification && (
+        <section className={styles.cycleState} aria-labelledby={`cycle-state-${member.id}`}>
+          <div className={styles.cycleStateHead}>
+            <div>
+              <span className={styles.fieldLabel} id={`cycle-state-${member.id}`}>
+                Active-cycle qualification
+              </span>
+              <strong>{focusCampaign?.name}</strong>
+            </div>
+            <span>{qualification.blocker}</span>
+          </div>
+          <dl className={styles.cycleStateGrid}>
+            <div>
+              <dt>Life Group attendances</dt>
+              <dd>{qualification.lifeGroupAttendanceCount}</dd>
+            </div>
+            <div>
+              <dt>Knowing God</dt>
+              <dd>
+                {qualification.kgcCompleted
+                  ? `Completed ${qualification.kgcCompletedOn ? new Date(`${qualification.kgcCompletedOn}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}`
+                  : qualification.kgcEligible
+                    ? 'Eligible now'
+                    : `Needs ${Math.max(0, 2 - qualification.lifeGroupAttendanceCount)} more LG`}
+              </dd>
+            </div>
+            <div>
+              <dt>Light Up</dt>
+              <dd>
+                {qualification.lightUpCompleted
+                  ? 'Completed'
+                  : qualification.lightUpEligible
+                    ? 'Ready'
+                    : qualification.lifeGroupAttendanceCount >= 3
+                      ? 'Blocked by KGC'
+                      : 'Not yet ready'}
+              </dd>
+            </div>
+            <div>
+              <dt>Living in Victory</dt>
+              <dd>{qualification.lightUpCompleted ? `${qualification.livProgress} / 2` : 'Locked — complete Light Up first'}</dd>
+            </div>
+            <div>
+              <dt>Water Baptism</dt>
+              <dd>{qualification.waterBaptismCompleted ? 'Completed' : qualification.waterBaptismEligible ? 'Ready' : 'Locked — complete Light Up first'}</dd>
+            </div>
+          </dl>
+          <p>New Life Sunday and Beginning Your New Life do not block KGC or Light Up.</p>
+        </section>
+      )}
+
+      <span className={styles.fieldLabel}>Legacy journey milestones</span>
       <div className={styles.milestones}>
         {stages.map((stage) => {
           const ms = milestones.find((x) => x.stageKey === stage.key);
@@ -265,7 +322,16 @@ export function MemberDialog({ member, onClose }: { member: Member; onClose: () 
             <div key={stage.id} className={styles.milestoneRow}>
               <button type="button" className={`tap-target-inline ${styles.milestoneToggle}`} aria-pressed={!!ms} onClick={() => toggleMilestone(stage.key)}>
                 <span className={styles.milestoneMark} aria-hidden="true">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round">
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="3.4"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
                     <path d="M4 12.5 10 18 20 6" />
                   </svg>
                 </span>

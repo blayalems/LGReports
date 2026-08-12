@@ -6,7 +6,7 @@ import { nowISO, todayISO } from '../../domain/dateUtils';
 import { createEmptySnapshot } from '../../domain/demoData';
 import { newId } from '../../domain/ids';
 import { notDeleted } from '../../domain/selectors';
-import { isTrackerSnapshot } from '../../domain/snapshotValidation';
+import { normalizeTrackerSnapshot } from '../../domain/snapshotValidation';
 import type { Config } from '../../domain/types';
 import { showToast } from '../../hooks/useToast';
 import { downloadBlob } from '../../lib/xlsx/writer';
@@ -87,13 +87,10 @@ export default function SettingsPage() {
     if (!file || !repository.restoreSnapshot) return;
     try {
       const parsed: unknown = JSON.parse(await file.text());
-      if (!isTrackerSnapshot(parsed)) {
-        showToast("That file doesn't look like a tracker backup", 'error');
-        return;
-      }
-      const summary = `${parsed.members.length} members, ${parsed.groups.length} groups, ${parsed.weeks.length} weeks`;
+      const normalized = normalizeTrackerSnapshot(parsed);
+      const summary = `${normalized.members.length} members, ${normalized.groups.length} groups, ${normalized.weeks.length} weeks`;
       if (!window.confirm(`Replace everything on this device with the backup (${summary})? This can't be undone.`)) return;
-      await repository.restoreSnapshot(parsed);
+      await repository.restoreSnapshot(normalized);
       await refresh();
       showToast('Backup restored', 'success');
     } catch {
@@ -180,7 +177,13 @@ export default function SettingsPage() {
                 </span>
                 <div className={styles.segment} role="group" aria-labelledby="theme-label">
                   {THEMES.map((t) => (
-                    <button key={t.value} type="button" className={styles.segmentBtn} aria-pressed={config.theme === t.value} onClick={() => updateConfig({ theme: t.value })}>
+                    <button
+                      key={t.value}
+                      type="button"
+                      className={styles.segmentBtn}
+                      aria-pressed={config.theme === t.value}
+                      onClick={() => updateConfig({ theme: t.value })}
+                    >
                       {t.label}
                     </button>
                   ))}
@@ -237,7 +240,12 @@ export default function SettingsPage() {
                     defaultValue={stage.label}
                     onBlur={(e) => {
                       if (e.target.value !== stage.label) {
-                        void dispatch({ entity: { type: 'stage', id: stage.id }, op: 'update', payload: { label: e.target.value }, baseRevision: stage.revision });
+                        void dispatch({
+                          entity: { type: 'stage', id: stage.id },
+                          op: 'update',
+                          payload: { label: e.target.value },
+                          baseRevision: stage.revision,
+                        });
                       }
                     }}
                   />

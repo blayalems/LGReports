@@ -30,7 +30,7 @@ export function defaultStages(actorId: string): Stage[] {
 }
 
 export function blankMeta(): Meta {
-  return { trackerId: newId(), schemaVersion: 1, spreadsheetId: null };
+  return { trackerId: newId(), schemaVersion: 2, spreadsheetId: null };
 }
 
 export function blankConfig(actorId: string): Config {
@@ -63,6 +63,8 @@ export function createEmptySnapshot(actorId: string): TrackerSnapshot {
     meetings: [],
     attendanceEvents: [],
     campaigns: [],
+    campaignSessions: [],
+    campaignAttendanceEvents: [],
     campaignMetrics: [],
     rivals: [],
     events: [],

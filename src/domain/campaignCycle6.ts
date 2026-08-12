@@ -131,3 +131,23 @@ export const PROGRAM_LABELS: Record<CampaignProgramKey, string> = {
 };
 
 export const CHECKIN_PROGRAMS: CampaignProgramKey[] = ['kgc', 'light_up', 'liv', 'water_baptism'];
+
+/**
+ * Finds the official offerings that are still missing without undoing edits to
+ * dates, times, or venues already made by a network. Matching is a multiset by
+ * stable requirement key: repeated KGC/LIV schedule slots and both Light Up
+ * weekends remain distinct without treating an edited time as a missing slot.
+ */
+export function missingCycle6SessionTemplates(existing: Pick<CampaignSession, 'programKey' | 'requirementKey'>[]): CampaignSessionTemplate[] {
+  const slotKey = (session: Pick<CampaignSession, 'programKey' | 'requirementKey'>) => `${session.programKey}|${session.requirementKey}`;
+  const available = new Map<string, number>();
+  for (const session of existing) available.set(slotKey(session), (available.get(slotKey(session)) ?? 0) + 1);
+
+  return CYCLE6_SESSION_TEMPLATES.filter((template) => {
+    const key = slotKey(template);
+    const count = available.get(key) ?? 0;
+    if (count === 0) return true;
+    available.set(key, count - 1);
+    return false;
+  });
+}

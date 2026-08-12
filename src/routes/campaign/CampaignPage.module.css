@@ -331,6 +331,22 @@
   font-size: 18px;
   font-weight: 800;
 }
+.weekCard dd button {
+  width: 100%;
+  min-width: 44px;
+  min-height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+.weekCard dd button:hover,
+.weekCard dd button:focus-visible {
+  background: var(--accent-soft);
+}
 .twoColumn {
   display: grid;
   grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.55fr);
@@ -365,9 +381,27 @@
 }
 .queueControls {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(130px, 0.5fr) minmax(120px, 0.42fr);
+  grid-template-columns: minmax(180px, 1fr) repeat(3, minmax(120px, 0.42fr));
   gap: 8px;
   margin-bottom: 12px;
+}
+.queueSummary {
+  display: flex;
+  align-items: flex-end;
+  flex-direction: column;
+  gap: 5px;
+}
+.historyBadge {
+  min-height: 32px;
+  padding: 5px 9px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  font: inherit;
+  font-size: 9.5px;
+  font-weight: 800;
+  cursor: pointer;
 }
 .queueList,
 .checkinList {
@@ -449,6 +483,23 @@
 .goalTop > span {
   color: var(--text3);
   font-size: 9.5px;
+}
+.goalMeta {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.goalMeta button {
+  min-height: 32px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  font: inherit;
+  font-size: 9.5px;
+  font-weight: 800;
+  cursor: pointer;
 }
 .goalInputs {
   justify-content: flex-end;
@@ -611,6 +662,23 @@
   color: var(--accent);
   background: var(--accent-soft);
 }
+.sessionActions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.removeOffering {
+  min-height: 36px;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--bad);
+  background: transparent;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  cursor: pointer;
+}
 .playbook {
   margin-top: 16px;
   padding-top: 16px;
@@ -693,6 +761,24 @@
   color: var(--bad);
   font-weight: 750;
 }
+.checkinBody .pathStatus {
+  color: var(--text2);
+  font-weight: 750;
+}
+.sourceLink {
+  width: 100%;
+  min-height: 44px;
+  margin: -6px 0 7px;
+  padding: 7px 2px;
+  border: 0;
+  color: var(--accent);
+  background: transparent;
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
+}
 .checkedBadge,
 .quickBadge,
 .lockedBadge {
@@ -724,10 +810,6 @@
   gap: 9px;
   margin-top: 8px;
 }
-.mobileQueueCta {
-  display: none;
-}
-
 @media (max-width: 1180px) {
   .kpiGrid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -804,22 +886,11 @@
   .checkinBtn {
     width: 100%;
   }
+  .sessionActions {
+    grid-column: 1 / -1;
+  }
   .playbook ol {
     columns: 1;
-  }
-  .mobileQueueCta {
-    display: block;
-    position: sticky;
-    z-index: 5;
-    bottom: 70px;
-    padding: 10px 0 0;
-    text-align: center;
-    pointer-events: none;
-  }
-  .mobileQueueCta button {
-    width: min(100%, 360px);
-    box-shadow: var(--shadow-lg);
-    pointer-events: auto;
   }
 }
 

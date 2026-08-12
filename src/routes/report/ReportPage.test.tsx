@@ -1,7 +1,7 @@
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { nowISO } from '../../domain/dateUtils';
+import { nowISO, todayISO } from '../../domain/dateUtils';
 import { _resetDBForTests } from '../../repository/local/db';
 import { LocalTrackerRepository } from '../../repository/local/LocalTrackerRepository';
 import { renderWithProviders } from '../../test/renderWithProviders';
@@ -29,6 +29,7 @@ async function seedRoster() {
       payload: { name: g.name, category: g.category, location: '', weeklyTarget: null },
     });
   }
+  return repo;
 }
 
 describe('ReportPage', () => {
@@ -98,6 +99,36 @@ describe('ReportPage', () => {
       const member = snapshot.members.find((row) => row.name === 'Fictional New VIP');
       expect(member?.status).toBe('vip');
       expect(snapshot.attendanceEvents.some((event) => event.memberId === member?.id && event.action === 'checked_in')).toBe(true);
+    });
+  });
+
+  it('dates an undated meeting when the first named person is checked in', async () => {
+    const user = userEvent.setup();
+    const repo = await seedRoster();
+    await repo.saveCommand({
+      commandId: 'seed-member',
+      actorId: 'seed-actor',
+      timestamp: nowISO(),
+      entity: { type: 'member', id: 'dated-member' },
+      op: 'create',
+      payload: {
+        name: 'Fictional Dated Attendee',
+        status: 'vip',
+        groupId: 'g-lead',
+        phone: '',
+        address: '',
+        notes: '',
+        birthdayMonth: null,
+        birthdayDay: null,
+        photoMediaId: null,
+      },
+    });
+    const { repository } = await renderWithProviders(<ReportPage params={[]} />, { seed: false });
+    await user.click((await screen.findAllByRole('button', { name: /check-in/i }))[0]);
+    await user.click(await screen.findByRole('button', { name: /Fictional Dated Attendee/i }));
+    await waitFor(async () => {
+      const snapshot = await repository.refresh();
+      expect(snapshot.meetings.find((meeting) => meeting.groupId === 'g-lead')?.date).toBe(todayISO());
     });
   });
 });

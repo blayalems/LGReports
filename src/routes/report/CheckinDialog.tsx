@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Dialog } from '../../components/ui/Dialog';
 import { nowISO, todayISO } from '../../domain/dateUtils';
 import { newId } from '../../domain/ids';
@@ -15,6 +15,7 @@ import styles from './CheckinDialog.module.css';
 export function CheckinDialog({ meeting, onClose }: { meeting: Meeting; onClose: () => void }) {
   const { snapshot, dispatch, actorId } = useTracker();
   const [query, setQuery] = useState('');
+  const meetingDateUpdate = useRef<Promise<void> | null>(null);
 
   const members = useMemo(() => {
     if (!snapshot) return [];
@@ -35,8 +36,23 @@ export function CheckinDialog({ meeting, onClose }: { meeting: Meeting; onClose:
   const total = meetingAttendance(snapshot, meeting);
   const canAdd = query.trim().length > 0 && !members.some((m) => m.name.trim().toLowerCase() === query.trim().toLowerCase());
 
-  const toggle = (member: Member) => {
-    void dispatch({
+  const ensureMeetingDate = async () => {
+    if (meeting.date) return;
+    meetingDateUpdate.current ??= dispatch({
+      entity: { type: 'meeting', id: meeting.id },
+      op: 'update',
+      payload: { date: todayISO() },
+      baseRevision: meeting.revision,
+    }).catch((error: unknown) => {
+      meetingDateUpdate.current = null;
+      throw error;
+    });
+    await meetingDateUpdate.current;
+  };
+
+  const toggle = async (member: Member) => {
+    await ensureMeetingDate();
+    await dispatch({
       entity: { type: 'attendanceEvent', id: newId() },
       op: 'append',
       payload: {
@@ -52,6 +68,7 @@ export function CheckinDialog({ meeting, onClose }: { meeting: Meeting; onClose:
   const addNewMember = async (status: 'vip' | 'regular') => {
     const name = query.trim();
     const memberId = newId();
+    await ensureMeetingDate();
     await dispatch({
       entity: { type: 'member', id: memberId },
       op: 'create',
@@ -134,7 +151,7 @@ export function CheckinDialog({ meeting, onClose }: { meeting: Meeting; onClose:
           const isPresent = present.has(m.id);
           return (
             <li key={m.id}>
-              <button type="button" className={styles.memberRow} aria-pressed={isPresent} onClick={() => toggle(m)}>
+              <button type="button" className={styles.memberRow} aria-pressed={isPresent} onClick={() => void toggle(m)}>
                 <span className={styles.avatar} style={{ background: avatarColor(m.id) }} aria-hidden="true">
                   {initials(m.name)}
                 </span>

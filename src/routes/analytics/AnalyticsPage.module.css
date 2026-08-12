@@ -54,11 +54,17 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  width: 100%;
   gap: 12px;
   padding: 10px 0;
+  border: 0;
   border-bottom: 1px solid var(--stroke2);
   color: var(--text2);
+  background: transparent;
+  font: inherit;
   font-size: 12px;
+  text-align: left;
+  cursor: pointer;
 }
 .retentionRow:last-child {
   border-bottom: 0;
@@ -67,6 +73,10 @@
   color: var(--accent);
   font-family: var(--font-display);
   font-size: 20px;
+}
+.retentionRow:hover span,
+.retentionRow:focus-visible span {
+  color: var(--text);
 }
 
 .statPair {

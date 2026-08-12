@@ -166,12 +166,28 @@ export function upcomingEvents(snapshot: TrackerSnapshot, from = new Date()) {
 export function activeCampaign(snapshot: TrackerSnapshot, today = new Date()): Campaign | undefined {
   const todayISO = toISODate(today);
   const campaigns = notDeleted(snapshot.campaigns);
-  const scheduledCampaignIds = new Set(notDeleted(snapshot.campaignSessions ?? []).map((session) => session.campaignId));
+  const sessions = notDeleted(snapshot.campaignSessions ?? []);
+  const scheduledCampaignIds = new Set(sessions.map((session) => session.campaignId));
   const active = campaigns
     .filter((campaign) => campaign.start <= todayISO && todayISO <= campaign.end)
     .sort((a, b) => Number(scheduledCampaignIds.has(b.id)) - Number(scheduledCampaignIds.has(a.id)) || b.start.localeCompare(a.start))[0];
-  if (active) return active;
-  const future = campaigns.filter((c) => c.start > todayISO).sort((a, b) => (a.start < b.start ? -1 : 1))[0];
+  const futureCampaigns = campaigns.filter((campaign) => campaign.start > todayISO).sort((a, b) => a.start.localeCompare(b.start));
+  if (active) {
+    if (scheduledCampaignIds.has(active.id)) return active;
+    const upcomingScheduled = futureCampaigns.find((campaign) => scheduledCampaignIds.has(campaign.id));
+    if (upcomingScheduled) {
+      const nextRelevantDate = [
+        upcomingScheduled.start,
+        ...sessions.filter((session) => session.campaignId === upcomingScheduled.id).map((session) => session.dateStart),
+      ]
+        .filter((date) => date >= todayISO)
+        .sort()[0];
+      const parsed = nextRelevantDate ? parseISODate(nextRelevantDate) : null;
+      if (parsed && daysBetween(today, parsed) <= 30) return upcomingScheduled;
+    }
+    return active;
+  }
+  const future = futureCampaigns[0];
   if (future) return future;
   return campaigns.slice().sort((a, b) => (a.end > b.end ? -1 : 1))[0];
 }
@@ -265,13 +281,16 @@ export function campaignSessionsFor(snapshot: TrackerSnapshot, campaignId: strin
 
 /** Distinct dated Life Group meetings where the named person is currently checked in. */
 export function lifeGroupAttendanceDates(snapshot: TrackerSnapshot, memberId: string, throughISO = '9999-12-31'): string[] {
-  const dates = new Set<string>();
+  const dates: string[] = [];
   for (const meeting of notDeleted(snapshot.meetings)) {
-    const meetingDate = meeting.date || snapshot.weeks.find((week) => week.id === meeting.weekId)?.weekOf || '';
+    // A reporting-week start is not evidence that an undated meeting happened
+    // before a historical campaign session. Named check-in records only become
+    // qualification evidence once the meeting has an actual local calendar date.
+    const meetingDate = meeting.date;
     if (!meetingDate || meetingDate > throughISO) continue;
-    if (currentAttendeeIds(snapshot.attendanceEvents, meeting.id).has(memberId)) dates.add(meetingDate);
+    if (currentAttendeeIds(snapshot.attendanceEvents, meeting.id).has(memberId)) dates.push(meetingDate);
   }
-  return [...dates].sort();
+  return dates.sort();
 }
 
 function attendedSessions(
@@ -339,6 +358,14 @@ function nextSessionDate(snapshot: TrackerSnapshot, campaignId: string, programK
   return campaignSessionsFor(snapshot, campaignId, programKey).find((session) => session.dateStart >= afterISO)?.dateStart ?? null;
 }
 
+function lastSessionDate(snapshot: TrackerSnapshot, campaignId: string, programKey: CampaignProgramKey, throughISO: string): string | null {
+  return (
+    campaignSessionsFor(snapshot, campaignId, programKey)
+      .filter((session) => session.dateStart <= throughISO)
+      .at(-1)?.dateStart ?? null
+  );
+}
+
 function actionDetails(
   snapshot: TrackerSnapshot,
   campaign: Campaign,
@@ -346,11 +373,20 @@ function actionDetails(
   state: Omit<CampaignQualification, 'blocker' | 'actionKey' | 'nextAction' | 'deadline'>,
 ): Pick<CampaignQualification, 'blocker' | 'actionKey' | 'nextAction' | 'deadline'> {
   if (state.lightUpCompleted && state.livProgress < 2) {
+    const nextLiv = nextSessionDate(snapshot, campaign.id, 'liv', asOf);
+    const nextBaptism = nextSessionDate(snapshot, campaign.id, 'water_baptism', asOf);
+    const nextAction = nextLiv
+      ? state.livProgress === 1
+        ? 'Attend the remaining Living in Victory Sunday'
+        : 'Start Living in Victory; Water Baptism is also unlocked'
+      : nextBaptism
+        ? 'LIV dates have passed; confirm Water Baptism and arrange LIV follow-up'
+        : 'Follow up on incomplete Living in Victory';
     return {
       blocker: `Living in Victory: ${state.livProgress} of 2 completed`,
       actionKey: 'liv_incomplete',
-      nextAction: state.livProgress === 1 ? 'Attend the remaining Living in Victory Sunday' : 'Start Living in Victory; Water Baptism is also unlocked',
-      deadline: nextSessionDate(snapshot, campaign.id, 'liv', asOf) ?? nextSessionDate(snapshot, campaign.id, 'water_baptism', asOf),
+      nextAction,
+      deadline: nextLiv ?? nextBaptism ?? lastSessionDate(snapshot, campaign.id, 'liv', asOf) ?? lastSessionDate(snapshot, campaign.id, 'water_baptism', asOf),
     };
   }
   if (state.lightUpCompleted && !state.waterBaptismCompleted) {
@@ -358,7 +394,7 @@ function actionDetails(
       blocker: 'Ready for Water Baptism',
       actionKey: 'baptism_ready',
       nextAction: 'Confirm Water Baptism attendance',
-      deadline: nextSessionDate(snapshot, campaign.id, 'water_baptism', asOf),
+      deadline: nextSessionDate(snapshot, campaign.id, 'water_baptism', asOf) ?? lastSessionDate(snapshot, campaign.id, 'water_baptism', asOf),
     };
   }
   if (state.lightUpEligible && !state.lightUpCompleted) {
@@ -366,7 +402,7 @@ function actionDetails(
       blocker: 'Ready for Light Up',
       actionKey: 'light_up_ready',
       nextAction: 'Confirm a Light Up Retreat weekend',
-      deadline: nextSessionDate(snapshot, campaign.id, 'light_up', asOf),
+      deadline: nextSessionDate(snapshot, campaign.id, 'light_up', asOf) ?? lastSessionDate(snapshot, campaign.id, 'light_up', asOf),
     };
   }
   if (state.lifeGroupAttendanceCount >= 3 && !state.kgcCompleted) {
@@ -374,7 +410,7 @@ function actionDetails(
       blocker: '3 LG attendances reached — KGC is the only blocker',
       actionKey: 'blocked_by_kgc',
       nextAction: 'Invite to the next Knowing God Class',
-      deadline: nextSessionDate(snapshot, campaign.id, 'kgc', asOf),
+      deadline: nextSessionDate(snapshot, campaign.id, 'kgc', asOf) ?? lastSessionDate(snapshot, campaign.id, 'kgc', asOf),
     };
   }
   if (state.kgcEligible && !state.kgcCompleted) {
@@ -382,7 +418,7 @@ function actionDetails(
       blocker: 'KGC eligible',
       actionKey: 'kgc_eligible',
       nextAction: 'Invite to the next Knowing God Class',
-      deadline: nextSessionDate(snapshot, campaign.id, 'kgc', asOf),
+      deadline: nextSessionDate(snapshot, campaign.id, 'kgc', asOf) ?? lastSessionDate(snapshot, campaign.id, 'kgc', asOf),
     };
   }
   if (state.kgcCompleted && state.lifeGroupAttendanceCount < 3) {
@@ -390,7 +426,7 @@ function actionDetails(
       blocker: 'Needs 1 more Life Group attendance for Light Up',
       actionKey: 'complete_light_up',
       nextAction: 'Invite back to Life Group',
-      deadline: nextSessionDate(snapshot, campaign.id, 'light_up', asOf),
+      deadline: nextSessionDate(snapshot, campaign.id, 'light_up', asOf) ?? lastSessionDate(snapshot, campaign.id, 'light_up', asOf),
     };
   }
   if (state.lifeGroupAttendanceCount === 1) {
@@ -398,7 +434,7 @@ function actionDetails(
       blocker: 'Needs 1 more Life Group attendance for KGC',
       actionKey: 'one_lg_away',
       nextAction: 'Invite back to Life Group',
-      deadline: nextSessionDate(snapshot, campaign.id, 'kgc', asOf),
+      deadline: nextSessionDate(snapshot, campaign.id, 'kgc', asOf) ?? lastSessionDate(snapshot, campaign.id, 'kgc', asOf),
     };
   }
   if (!state.lightUpCompleted) {
@@ -406,7 +442,7 @@ function actionDetails(
       blocker: 'Needs 2 Life Group attendances for KGC',
       actionKey: 'needs_two_lg',
       nextAction: 'Connect through a named Life Group check-in',
-      deadline: nextSessionDate(snapshot, campaign.id, 'kgc', asOf),
+      deadline: nextSessionDate(snapshot, campaign.id, 'kgc', asOf) ?? lastSessionDate(snapshot, campaign.id, 'kgc', asOf),
     };
   }
   return { blocker: 'Campaign path completed', actionKey: 'complete', nextAction: 'Continue faithful follow-up', deadline: null };
@@ -492,7 +528,7 @@ export function canAttendCampaignSession(
 }
 
 export function derivedCampaignActual(snapshot: TrackerSnapshot, campaignId: string, stageKey: string): number | null {
-  if (!(snapshot.campaignSessions ?? []).some((session) => session.campaignId === campaignId)) return null;
+  if (campaignSessionsFor(snapshot, campaignId).length === 0) return null;
   const campaign = notDeleted(snapshot.campaigns).find((row) => row.id === campaignId);
   if (!campaign) return null;
   const states = campaignQualifications(snapshot, campaign);

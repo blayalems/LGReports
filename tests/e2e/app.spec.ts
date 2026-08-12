@@ -38,10 +38,10 @@ test('first run, core workflows, routes, and responsive layout', async ({ page }
 
   if (testInfo.project.name === 'desktop-chrome') {
     await resetMainScroll(page);
-    await page.screenshot({ path: testInfo.outputPath('dashboard-desktop.png') });
+    await page.screenshot({ path: testInfo.outputPath('01-dashboard-desktop.png') });
   } else {
     await resetMainScroll(page);
-    await page.screenshot({ path: testInfo.outputPath('dashboard-mobile.png') });
+    await page.screenshot({ path: testInfo.outputPath('01-dashboard-mobile.png') });
   }
 
   for (const [route, heading] of routes) {
@@ -79,7 +79,7 @@ test('first run, core workflows, routes, and responsive layout', async ({ page }
   const memberName = page.getByPlaceholder('Member name');
   await memberName.fill('Browser Test Member');
   await memberName.blur();
-  await page.getByRole('button', { name: 'Done' }).click();
+  await page.getByRole('button', { name: 'Done', exact: true }).click();
   await expect(page.getByRole('button', { name: /Browser Test Member/i })).toBeVisible();
 
   await page.goto('./#/campaign');
@@ -98,7 +98,7 @@ test('first run, core workflows, routes, and responsive layout', async ({ page }
   const firstLgDialog = page.getByRole('dialog');
   await firstLgDialog.getByRole('searchbox', { name: /search or add a member/i }).fill('Journey Test VIP');
   await firstLgDialog.getByRole('button', { name: /add “Journey Test VIP” as VIP & check in/i }).click();
-  await firstLgDialog.getByRole('button', { name: 'Done' }).click();
+  await firstLgDialog.getByRole('button', { name: 'Done', exact: true }).click();
   await page.goto('./#/campaign');
   await page.getByRole('tab', { name: 'One More for Jesus Campaign Cycle 6' }).click();
   await page.getByRole('button', { name: /1 LG away from KGC/i }).click();
@@ -113,13 +113,39 @@ test('first run, core workflows, routes, and responsive layout', async ({ page }
   const secondLgDialog = page.getByRole('dialog');
   await secondLgDialog.getByRole('searchbox', { name: /search or add a member/i }).fill('Journey Test VIP');
   await secondLgDialog.getByRole('button', { name: /Journey Test VIP/i }).click();
-  await secondLgDialog.getByRole('button', { name: 'Done' }).click();
+  await secondLgDialog.getByRole('button', { name: 'Done', exact: true }).click();
   await page.goto('./#/campaign');
   await page.getByRole('tab', { name: 'One More for Jesus Campaign Cycle 6' }).click();
   await page.getByRole('button', { name: /KGC eligible now/i }).click();
   await expect(page.getByRole('button', { name: /Journey Test VIP/i })).toBeVisible();
 
-  // Journey B: third LG, one KGC offering, then Light Up unlocks LIV and Baptism independently.
+  await page.locator('#campaign-action-queue').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: testInfo.outputPath(`02-kgc-queue-${testInfo.project.name}.png`) });
+
+  // One KGC schedule completes KGC; NLS and BYNL remain explicitly non-gating.
+  await page.getByText(/Cycle schedule & event check-in/i).click();
+  const kgcSection = page.getByRole('heading', { name: 'Knowing God Class' }).locator('..').locator('..');
+  await kgcSection
+    .getByRole('button', { name: /Check in Knowing God Class/i })
+    .first()
+    .click();
+  const kgcDialog = page.getByRole('dialog');
+  await kgcDialog.getByRole('searchbox', { name: /search people/i }).fill('Journey Test VIP');
+  await page.screenshot({ path: testInfo.outputPath(`03-kgc-checkin-${testInfo.project.name}.png`) });
+  await kgcDialog.getByRole('button', { name: /Journey Test VIP/i }).click();
+  await kgcDialog.getByRole('button', { name: 'Done', exact: true }).click();
+  await page.getByRole('button', { name: 'All people', exact: true }).click();
+  await page.getByRole('button', { name: /Journey Test VIP/i }).click();
+  const kgcMemberDialog = page.getByRole('dialog');
+  await expect(kgcMemberDialog.getByText(/Completed Sep 27/i)).toBeVisible();
+  await expect(kgcMemberDialog.getByRole('button', { name: 'New Life Sunday VIPs' })).toHaveAttribute('aria-pressed', 'false');
+  await expect(kgcMemberDialog.getByRole('button', { name: 'Beginning Your New Life' })).toHaveAttribute('aria-pressed', 'false');
+  await page.waitForTimeout(2_800);
+  await kgcMemberDialog.getByText('Active-cycle qualification').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: testInfo.outputPath(`04-member-kgc-qualified-${testInfo.project.name}.png`) });
+  await kgcMemberDialog.getByRole('button', { name: 'Done', exact: true }).click();
+
+  // Journey B: a third distinct LG date unlocks Light Up after KGC.
   await page.goto('./#/report');
   await page.locator('input[type="date"]').nth(2).fill('2026-09-03');
   await page
@@ -129,21 +155,14 @@ test('first run, core workflows, routes, and responsive layout', async ({ page }
   const thirdLgDialog = page.getByRole('dialog');
   await thirdLgDialog.getByRole('searchbox', { name: /search or add a member/i }).fill('Journey Test VIP');
   await thirdLgDialog.getByRole('button', { name: /Journey Test VIP/i }).click();
-  await thirdLgDialog.getByRole('button', { name: 'Done' }).click();
+  await thirdLgDialog.getByRole('button', { name: 'Done', exact: true }).click();
   await page.goto('./#/campaign');
   await page.getByRole('tab', { name: 'One More for Jesus Campaign Cycle 6' }).click();
-  await page.getByText(/Cycle schedule & event check-in/i).click();
-  const kgcSection = page.getByRole('heading', { name: 'Knowing God Class' }).locator('..').locator('..');
-  await kgcSection
-    .getByRole('button', { name: /Check in Knowing God Class/i })
-    .first()
-    .click();
-  const kgcDialog = page.getByRole('dialog');
-  await kgcDialog.getByRole('searchbox', { name: /search people/i }).fill('Journey Test VIP');
-  await kgcDialog.getByRole('button', { name: /Journey Test VIP/i }).click();
-  await kgcDialog.getByRole('button', { name: 'Done' }).click();
   await page.getByRole('button', { name: 'Light Up ready', exact: true }).click();
   await expect(page.getByRole('button', { name: /Journey Test VIP/i })).toBeVisible();
+  await page.locator('#campaign-action-queue').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: testInfo.outputPath(`05-light-up-ready-${testInfo.project.name}.png`) });
+  await page.getByText(/Cycle schedule & event check-in/i).click();
   const lightSection = page.getByRole('heading', { name: 'Light Up Retreat' }).locator('..').locator('..');
   await lightSection
     .getByRole('button', { name: /Check in Light Up Retreat/i })
@@ -152,9 +171,14 @@ test('first run, core workflows, routes, and responsive layout', async ({ page }
   const lightUpDialog = page.getByRole('dialog');
   await lightUpDialog.getByRole('searchbox', { name: /search people/i }).fill('Journey Test VIP');
   await lightUpDialog.getByRole('button', { name: /Journey Test VIP/i }).click();
-  await lightUpDialog.getByRole('button', { name: 'Done' }).click();
+  await lightUpDialog.getByRole('button', { name: 'Done', exact: true }).click();
   await page.getByRole('button', { name: 'Baptism ready', exact: true }).click();
   await expect(page.getByRole('button', { name: /Journey Test VIP/i })).toBeVisible();
+  await page.getByRole('button', { name: /Journey Test VIP/i }).click();
+  const lightUpMemberDialog = page.getByRole('dialog');
+  await expect(lightUpMemberDialog.getByText('0 / 2')).toBeVisible();
+  await expect(lightUpMemberDialog.getByText('Ready', { exact: true })).toBeVisible();
+  await lightUpMemberDialog.getByRole('button', { name: 'Done', exact: true }).click();
 
   // Journey C: distinct LIV Sundays produce 1/2, then 2/2.
   const livSection = page.getByRole('heading', { name: 'Living in Victory' }).locator('..').locator('..');
@@ -163,32 +187,38 @@ test('first run, core workflows, routes, and responsive layout', async ({ page }
   const firstLivDialog = page.getByRole('dialog');
   await firstLivDialog.getByRole('searchbox', { name: /search people/i }).fill('Journey Test VIP');
   await firstLivDialog.getByRole('button', { name: /Journey Test VIP/i }).click();
-  await firstLivDialog.getByRole('button', { name: 'Done' }).click();
+  await firstLivDialog.getByRole('button', { name: 'Done', exact: true }).click();
   await page.getByRole('button', { name: /Journey Test VIP/i }).click();
   const firstMemberDialog = page.getByRole('dialog');
   await expect(firstMemberDialog.getByText('1 / 2')).toBeVisible();
-  await firstMemberDialog.getByRole('button', { name: 'Done' }).click();
+  await page.waitForTimeout(2_800);
+  await firstMemberDialog.getByText('Active-cycle qualification').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: testInfo.outputPath(`06-liv-one-of-two-${testInfo.project.name}.png`) });
+  await firstMemberDialog.getByRole('button', { name: 'Done', exact: true }).click();
   await livButtons.nth(3).click();
   const secondLivDialog = page.getByRole('dialog');
   await secondLivDialog.getByRole('searchbox', { name: /search people/i }).fill('Journey Test VIP');
   await secondLivDialog.getByRole('button', { name: /Journey Test VIP/i }).click();
-  await secondLivDialog.getByRole('button', { name: 'Done' }).click();
+  await secondLivDialog.getByRole('button', { name: 'Done', exact: true }).click();
   await page.getByRole('button', { name: /Journey Test VIP/i }).click();
   const secondMemberDialog = page.getByRole('dialog');
   await expect(secondMemberDialog.getByText('2 / 2')).toBeVisible();
-  await secondMemberDialog.getByRole('button', { name: 'Done' }).click();
+  await secondMemberDialog.getByRole('button', { name: 'Done', exact: true }).click();
 
   await page.getByRole('button', { name: 'All people', exact: true }).click();
+  await page.locator('#campaign-action-queue').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: testInfo.outputPath(`07-action-queue-${testInfo.project.name}.png`) });
   await resetMainScroll(page);
   await page.waitForTimeout(3_500);
   if (testInfo.project.name === 'desktop-chrome') {
-    await page.screenshot({ path: testInfo.outputPath('campaign-desktop.png') });
-    await page.screenshot({ path: testInfo.outputPath('campaign-desktop-full.png'), fullPage: true });
+    await page.screenshot({ path: testInfo.outputPath('08-command-center-desktop.png') });
   } else {
-    await page.screenshot({ path: testInfo.outputPath('campaign-mobile.png') });
-    await page.screenshot({ path: testInfo.outputPath('campaign-mobile-full.png'), fullPage: true });
+    await page.screenshot({ path: testInfo.outputPath('08-command-center-mobile.png') });
   }
   await expectViewportStable(page);
+
+  await page.getByRole('heading', { name: 'Follow-up by Life Group' }).scrollIntoViewIfNeeded();
+  await page.screenshot({ path: testInfo.outputPath(`09-leader-accountability-${testInfo.project.name}.png`) });
 
   await page.goto('./#/members');
   await expect(page.getByRole('button', { name: /Browser Test Member/i })).toBeVisible();

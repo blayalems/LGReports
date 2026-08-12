@@ -14,6 +14,7 @@ import {
   weeksChrono,
   weekTotal,
 } from '../../domain/selectors';
+import { useRouter } from '../../router/HashRouter';
 import { useTracker } from '../../state/StoreContext';
 import styles from './AnalyticsPage.module.css';
 
@@ -25,6 +26,7 @@ const TREND_META = {
 
 export default function AnalyticsPage() {
   const { snapshot } = useTracker();
+  const { navigate } = useRouter();
   if (!snapshot) return null;
 
   // Attendance trend: weekly totals + trailing 4-week average.
@@ -60,11 +62,15 @@ export default function AnalyticsPage() {
     return { label: sp.stage.label, count: sp.actual, dropLabel };
   });
   const readinessRows = [
-    { label: 'KGC eligible now', count: campaignStates.filter((state) => state.kgcEligible && !state.kgcCompleted).length },
-    { label: 'Blocked only by KGC', count: campaignStates.filter((state) => state.actionKey === 'blocked_by_kgc').length },
-    { label: 'Light Up ready', count: campaignStates.filter((state) => state.lightUpEligible && !state.lightUpCompleted).length },
-    { label: 'LIV incomplete', count: campaignStates.filter((state) => state.lightUpCompleted && !state.livCompleted).length },
-    { label: 'Water Baptism ready', count: campaignStates.filter((state) => state.waterBaptismEligible && !state.waterBaptismCompleted).length },
+    { label: 'KGC eligible now', filter: 'kgc_eligible', count: campaignStates.filter((state) => state.kgcEligible && !state.kgcCompleted).length },
+    { label: 'Blocked only by KGC', filter: 'blocked_by_kgc', count: campaignStates.filter((state) => state.actionKey === 'blocked_by_kgc').length },
+    { label: 'Light Up ready', filter: 'light_up_ready', count: campaignStates.filter((state) => state.lightUpEligible && !state.lightUpCompleted).length },
+    { label: 'LIV incomplete', filter: 'liv_incomplete', count: campaignStates.filter((state) => state.lightUpCompleted && !state.livCompleted).length },
+    {
+      label: 'Water Baptism ready',
+      filter: 'baptism_ready',
+      count: campaignStates.filter((state) => state.waterBaptismEligible && !state.waterBaptismCompleted).length,
+    },
   ];
 
   // Group performance (comparison bars are relative to the best-performing group).
@@ -116,10 +122,10 @@ export default function AnalyticsPage() {
             <h2 className={styles.cardTitle}>Qualification readiness</h2>
             <p className={styles.insight}>{campaign ? 'Person-level queues replace linear time-vs-total pacing.' : 'No active campaign.'}</p>
             {readinessRows.map((row) => (
-              <div key={row.label} className={styles.retentionRow}>
+              <button key={row.label} type="button" className={styles.retentionRow} onClick={() => navigate(`/campaign/${row.filter}`)}>
                 <span>{row.label}</span>
-                <strong>{row.count}</strong>
-              </div>
+                <strong>{row.count} →</strong>
+              </button>
             ))}
           </Card>
 

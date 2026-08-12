@@ -8,13 +8,14 @@ import {
   CAMPAIGN_PRINCIPLES,
   CHECKIN_PROGRAMS,
   CYCLE6_CAMPAIGN,
-  CYCLE6_SESSION_TEMPLATES,
   ESSENTIAL_ELEMENTS,
+  missingCycle6SessionTemplates,
   PROGRAM_LABELS,
 } from '../../domain/campaignCycle6';
 import { daysBetween, formatDate, nowISO, parseISODate, todayISO, toISODate } from '../../domain/dateUtils';
 import { newId } from '../../domain/ids';
 import {
+  activeCampaign,
   campaignQualification,
   campaignQualifications,
   campaignSessionsFor,
@@ -39,6 +40,7 @@ import styles from './CampaignPage.module.css';
 
 type QueueFilter =
   | 'all'
+  | 'week_named_lg'
   | 'one_lg_away'
   | 'kgc_eligible'
   | 'kgc_completed'
@@ -47,6 +49,7 @@ type QueueFilter =
   | 'light_up_completed'
   | 'liv_zero'
   | 'liv_one'
+  | 'liv_incomplete'
   | 'liv_complete'
   | 'baptism_ready'
   | 'baptized'
@@ -54,6 +57,7 @@ type QueueFilter =
 
 const FILTERS: { key: QueueFilter; label: string }[] = [
   { key: 'all', label: 'All people' },
+  { key: 'week_named_lg', label: 'Named LG this week' },
   { key: 'one_lg_away', label: '1 LG away' },
   { key: 'kgc_eligible', label: 'KGC eligible' },
   { key: 'kgc_completed', label: 'KGC completed' },
@@ -62,12 +66,16 @@ const FILTERS: { key: QueueFilter; label: string }[] = [
   { key: 'light_up_completed', label: 'Light Up completed' },
   { key: 'liv_zero', label: 'LIV 0/2' },
   { key: 'liv_one', label: 'LIV 1/2' },
+  { key: 'liv_incomplete', label: 'LIV incomplete' },
   { key: 'liv_complete', label: 'LIV 2/2' },
   { key: 'baptism_ready', label: 'Baptism ready' },
   { key: 'baptized', label: 'Baptized' },
   { key: 'at_risk', label: 'At risk' },
 ];
 const QUICK_FILTER_KEYS: QueueFilter[] = ['all', 'one_lg_away', 'kgc_eligible', 'blocked_by_kgc', 'light_up_ready', 'liv_one', 'baptism_ready', 'at_risk'];
+
+type DeadlineFilter = 'all' | 'next_7_days' | 'overdue' | 'no_date';
+type AttendanceWindow = { start: string; end: string };
 
 const ACTION_PRIORITY: Record<CampaignActionKey, number> = {
   blocked_by_kgc: 0,
@@ -86,10 +94,7 @@ function campaignToFocus(snapshot: TrackerSnapshot, selectedId: string | null): 
     .slice()
     .sort((a, b) => a.start.localeCompare(b.start));
   if (selectedId) return campaigns.find((campaign) => campaign.id === selectedId);
-  const today = todayISO();
-  return (
-    campaigns.find((campaign) => campaign.start <= today && campaign.end >= today) ?? campaigns.find((campaign) => campaign.start > today) ?? campaigns.at(-1)
-  );
+  return activeCampaign(snapshot);
 }
 
 function deadlineLabel(date: string | null): string {
@@ -100,7 +105,7 @@ function deadlineLabel(date: string | null): string {
   if (days === 0) return `Today · ${formatDate(date, { month: 'short', day: 'numeric' })}`;
   if (days === 1) return `Tomorrow · ${formatDate(date, { month: 'short', day: 'numeric' })}`;
   if (days > 1) return `${formatDate(date, { month: 'short', day: 'numeric' })} · ${days} days`;
-  return formatDate(date, { month: 'short', day: 'numeric' });
+  return `${formatDate(date, { month: 'short', day: 'numeric' })} · overdue`;
 }
 
 function timeLabel(session: CampaignSession): string {
@@ -113,8 +118,15 @@ function timeLabel(session: CampaignSession): string {
   return session.endTime ? `${format(session.startTime)}–${format(session.endTime)}` : format(session.startTime);
 }
 
-function statusMatches(state: CampaignQualification, filter: QueueFilter, snapshot: TrackerSnapshot): boolean {
+function statusMatches(
+  state: CampaignQualification,
+  filter: QueueFilter,
+  snapshot: TrackerSnapshot,
+  attendanceWindow: AttendanceWindow | null = null,
+): boolean {
   if (filter === 'all') return true;
+  if (filter === 'week_named_lg')
+    return Boolean(attendanceWindow && state.lifeGroupAttendanceDates.some((date) => date >= attendanceWindow.start && date <= attendanceWindow.end));
   if (filter === 'one_lg_away') return state.actionKey === 'one_lg_away';
   if (filter === 'kgc_eligible') return state.kgcEligible && !state.kgcCompleted;
   if (filter === 'kgc_completed') return state.kgcCompleted;
@@ -123,6 +135,7 @@ function statusMatches(state: CampaignQualification, filter: QueueFilter, snapsh
   if (filter === 'light_up_completed') return state.lightUpCompleted;
   if (filter === 'liv_zero') return state.lightUpCompleted && state.livProgress === 0;
   if (filter === 'liv_one') return state.lightUpCompleted && state.livProgress === 1;
+  if (filter === 'liv_incomplete') return state.lightUpCompleted && !state.livCompleted;
   if (filter === 'liv_complete') return state.livCompleted;
   if (filter === 'baptism_ready') return state.waterBaptismEligible && !state.waterBaptismCompleted;
   if (filter === 'baptized') return state.waterBaptismCompleted;
@@ -133,16 +146,50 @@ function statusMatches(state: CampaignQualification, filter: QueueFilter, snapsh
 }
 
 function queueCopy(state: CampaignQualification, filter: QueueFilter): { status: string; action: string } {
+  if (filter === 'week_named_lg') return { status: 'Named Life Group attendance recorded', action: state.nextAction };
   if (filter === 'kgc_completed')
     return { status: 'Knowing God completed', action: state.lightUpEligible ? 'Confirm a Light Up weekend' : 'Build the third named Life Group attendance' };
   if (filter === 'light_up_completed') return { status: 'Light Up completed', action: 'Follow up for Living in Victory and Water Baptism' };
   if (filter === 'liv_zero') return { status: 'Living in Victory: 0 of 2 completed', action: 'Attend both required Sundays' };
   if (filter === 'liv_one') return { status: 'Living in Victory: 1 of 2 completed', action: 'Attend the remaining required Sunday' };
+  if (filter === 'liv_incomplete')
+    return {
+      status: `Living in Victory: ${state.livProgress} of 2 completed`,
+      action: state.livProgress === 1 ? 'Attend the remaining required Sunday' : 'Attend both required Sundays',
+    };
   if (filter === 'liv_complete') return { status: 'Living in Victory: 2 of 2 completed', action: 'Continue faithful follow-up' };
   if (filter === 'baptism_ready') return { status: 'Ready for Water Baptism', action: 'Confirm Water Baptism attendance' };
   if (filter === 'baptized') return { status: 'Water Baptism completed', action: 'Continue faithful follow-up' };
   if (filter === 'at_risk') return { status: 'Attendance follow-up at risk', action: 'Reconnect personally before the next deadline' };
   return { status: state.blocker, action: state.nextAction };
+}
+
+function deadlineMatches(deadline: string | null, filter: DeadlineFilter, today = todayISO()): boolean {
+  if (filter === 'all') return true;
+  if (filter === 'no_date') return deadline == null;
+  if (!deadline) return false;
+  if (filter === 'overdue') return deadline < today;
+  const parsedToday = parseISODate(today);
+  const parsedDeadline = parseISODate(deadline);
+  return Boolean(parsedToday && parsedDeadline && deadline >= today && daysBetween(parsedToday, parsedDeadline) <= 7);
+}
+
+function sourceForGate(session: CampaignSession, state: CampaignQualification): 'life_group' | 'kgc' | 'light_up' | null {
+  if (session.programKey === 'kgc' && !state.kgcEligible) return 'life_group';
+  if (session.programKey === 'light_up') {
+    if (state.lifeGroupAttendanceCount < 3) return 'life_group';
+    if (!state.kgcCompleted) return 'kgc';
+  }
+  if ((session.programKey === 'liv' || session.programKey === 'water_baptism') && !state.lightUpCompleted) return 'light_up';
+  return null;
+}
+
+function filterForStage(stageKey: string): QueueFilter | null {
+  if (stageKey === 'kg') return 'kgc_completed';
+  if (stageKey === 'lu') return 'light_up_completed';
+  if (stageKey === 'liv') return 'liv_complete';
+  if (stageKey === 'wb') return 'baptized';
+  return null;
 }
 
 function KpiCard({ label, count, detail, active, onClick }: { label: string; count: number; detail: string; active: boolean; onClick: () => void }) {
@@ -156,9 +203,21 @@ function KpiCard({ label, count, detail, active, onClick }: { label: string; cou
   );
 }
 
-function SessionCheckinDialog({ campaign, session, onClose }: { campaign: Campaign; session: CampaignSession; onClose: () => void }) {
+function SessionCheckinDialog({
+  campaign,
+  session,
+  initialQuery,
+  onClose,
+  onReviewSource,
+}: {
+  campaign: Campaign;
+  session: CampaignSession;
+  initialQuery: string;
+  onClose: () => void;
+  onReviewSource: (member: Member, source: 'life_group' | 'kgc' | 'light_up') => void;
+}) {
   const { snapshot, dispatch, actorId } = useTracker();
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initialQuery);
   if (!snapshot) return null;
   const present = currentCampaignSessionAttendeeIds(snapshot.campaignAttendanceEvents, session.id);
   const q = query.trim().toLowerCase();
@@ -227,6 +286,8 @@ function SessionCheckinDialog({ campaign, session, onClose }: { campaign: Campai
       <ul className={styles.checkinList}>
         {rows.map(({ member, gate, state }) => {
           const checkedIn = present.has(member.id);
+          const source = sourceForGate(session, state);
+          const sourceLabel = source === 'life_group' ? 'Life Group attendance' : source === 'kgc' ? 'KGC check-in' : 'Light Up check-in';
           return (
             <li key={member.id}>
               <button
@@ -241,12 +302,26 @@ function SessionCheckinDialog({ campaign, session, onClose }: { campaign: Campai
                   <span>
                     {groupName(snapshot, member.groupId) || 'No Life Group'} · {state.lifeGroupAttendanceCount} named LG
                   </span>
+                  <span className={styles.pathStatus}>
+                    KGC {state.kgcCompleted ? 'done' : state.kgcEligible ? 'ready' : 'not ready'} · Light Up{' '}
+                    {state.lightUpCompleted ? 'done' : state.lightUpEligible ? 'ready' : 'not ready'} · LIV {state.livProgress}/2
+                  </span>
                   <span className={gate.allowed ? styles.readyText : styles.blockedText}>{gate.reason}</span>
                 </span>
                 <span className={checkedIn ? styles.checkedBadge : gate.allowed ? styles.quickBadge : styles.lockedBadge}>
                   {checkedIn ? 'Checked in' : gate.allowed ? 'Check in' : 'Blocked'}
                 </span>
               </button>
+              {!checkedIn && !gate.allowed && source && (
+                <button
+                  type="button"
+                  className={styles.sourceLink}
+                  aria-label={`Review ${sourceLabel} for ${member.name || 'this person'}`}
+                  onClick={() => onReviewSource(member, source)}
+                >
+                  Review {sourceLabel} →
+                </button>
+              )}
             </li>
           );
         })}
@@ -264,21 +339,29 @@ function Timeline({ snapshot, campaign, states }: { snapshot: TrackerSnapshot; c
   }
   const milestones = [...unique.values()].sort((a, b) => a.dateStart.localeCompare(b.dateStart));
   const next = milestones.find((session) => session.dateStart >= today);
+  const last = milestones.at(-1);
   const kgcWaiting = states.filter((state) => state.kgcEligible && !state.kgcCompleted).length;
   const lightReady = states.filter((state) => state.lightUpEligible && !state.lightUpCompleted).length;
   const blockedKgc = states.filter((state) => state.actionKey === 'blocked_by_kgc').length;
   const livOne = states.filter((state) => state.livProgress === 1).length;
-  let focusCopy = 'Keep named Life Group attendance current so every person has a clear next action.';
+  const baptismReady = states.filter((state) => state.waterBaptismEligible && !state.waterBaptismCompleted).length;
+  let focusCopy =
+    last && last.dateEnd < today
+      ? `Scheduled events ended ${formatDate(last.dateEnd, { month: 'short', day: 'numeric' })}. Use overdue queues for unresolved follow-up.`
+      : 'Keep named Life Group attendance current so every person has a clear next action.';
   if (next?.programKey === 'kgc') focusCopy = `${kgcWaiting} people are KGC eligible. ${next.name} is ${deadlineLabel(next.dateStart).toLowerCase()}.`;
   else if (next?.programKey === 'light_up') focusCopy = `${lightReady} people are Light Up ready. ${blockedKgc} more are blocked only by KGC.`;
   else if (next?.programKey === 'liv') focusCopy = `${livOne} Light Up graduates have completed 1 of 2 Living in Victory Sundays.`;
+  else if (next?.programKey === 'water_baptism') focusCopy = `${baptismReady} Light Up graduates are ready for Water Baptism.`;
 
   return (
     <Card className={styles.fullWidth}>
       <div className={styles.cardHead}>
         <div>
           <span className={styles.eyebrow}>Milestone-aware timeline</span>
-          <h2 className={styles.cardTitle}>{next ? `Next: ${PROGRAM_LABELS[next.programKey]}` : 'Campaign schedule'}</h2>
+          <h2 className={styles.cardTitle}>
+            {next ? `Next: ${PROGRAM_LABELS[next.programKey]}` : last && last.dateEnd < today ? 'Scheduled events complete' : 'Campaign schedule'}
+          </h2>
           <p className={styles.cardHint}>{focusCopy}</p>
         </div>
         {next && <span className={styles.deadlineBadge}>{deadlineLabel(next.dateStart)}</span>}
@@ -303,12 +386,25 @@ function Timeline({ snapshot, campaign, states }: { snapshot: TrackerSnapshot; c
   );
 }
 
-function WeeklyProgress({ snapshot, campaign }: { snapshot: TrackerSnapshot; campaign: Campaign }) {
+function WeeklyProgress({
+  snapshot,
+  campaign,
+  onInspect,
+}: {
+  snapshot: TrackerSnapshot;
+  campaign: Campaign;
+  onInspect: (filter: QueueFilter, window: AttendanceWindow) => void;
+}) {
   const rows = campaignWeeks(campaign).map((week) => {
-    const states = campaignQualifications(snapshot, campaign, week.end);
+    const window = {
+      start: week.start < campaign.start ? campaign.start : week.start,
+      end: week.end > campaign.end ? campaign.end : week.end,
+    };
+    const states = campaignQualifications(snapshot, campaign, window.end);
     return {
       ...week,
-      namedLg: states.filter((state) => state.lifeGroupAttendanceDates.some((date) => date >= week.start && date <= week.end)).length,
+      window,
+      namedLg: states.filter((state) => state.lifeGroupAttendanceDates.some((date) => date >= window.start && date <= window.end)).length,
       kgcCompleted: states.filter((state) => state.kgcCompleted).length,
       lightReady: states.filter((state) => state.lightUpEligible && !state.lightUpCompleted).length,
       lightCompleted: states.filter((state) => state.lightUpCompleted).length,
@@ -332,27 +428,63 @@ function WeeklyProgress({ snapshot, campaign }: { snapshot: TrackerSnapshot; cam
             <dl>
               <div>
                 <dt>Named LG</dt>
-                <dd>{row.namedLg}</dd>
+                <dd>
+                  <button
+                    type="button"
+                    onClick={() => onInspect('week_named_lg', row.window)}
+                    aria-label={`${row.label}: ${row.namedLg} named Life Group attendees`}
+                  >
+                    {row.namedLg}
+                  </button>
+                </dd>
               </div>
               <div>
                 <dt>KGC done</dt>
-                <dd>{row.kgcCompleted}</dd>
+                <dd>
+                  <button type="button" onClick={() => onInspect('kgc_completed', row.window)} aria-label={`${row.label}: ${row.kgcCompleted} KGC completions`}>
+                    {row.kgcCompleted}
+                  </button>
+                </dd>
               </div>
               <div>
                 <dt>Light Up ready</dt>
-                <dd>{row.lightReady}</dd>
+                <dd>
+                  <button type="button" onClick={() => onInspect('light_up_ready', row.window)} aria-label={`${row.label}: ${row.lightReady} Light Up ready`}>
+                    {row.lightReady}
+                  </button>
+                </dd>
               </div>
               <div>
                 <dt>Light Up done</dt>
-                <dd>{row.lightCompleted}</dd>
+                <dd>
+                  <button
+                    type="button"
+                    onClick={() => onInspect('light_up_completed', row.window)}
+                    aria-label={`${row.label}: ${row.lightCompleted} Light Up completions`}
+                  >
+                    {row.lightCompleted}
+                  </button>
+                </dd>
               </div>
               <div>
                 <dt>LIV 2/2</dt>
-                <dd>{row.livCompleted}</dd>
+                <dd>
+                  <button
+                    type="button"
+                    onClick={() => onInspect('liv_complete', row.window)}
+                    aria-label={`${row.label}: ${row.livCompleted} Living in Victory completions`}
+                  >
+                    {row.livCompleted}
+                  </button>
+                </dd>
               </div>
               <div>
                 <dt>Baptized</dt>
-                <dd>{row.baptized}</dd>
+                <dd>
+                  <button type="button" onClick={() => onInspect('baptized', row.window)} aria-label={`${row.label}: ${row.baptized} baptized`}>
+                    {row.baptized}
+                  </button>
+                </dd>
               </div>
             </dl>
           </article>
@@ -370,6 +502,12 @@ function ScheduleEditor({ snapshot, campaign, onCheckin }: { snapshot: TrackerSn
   sessions.forEach((session) => grouped.set(session.programKey, [...(grouped.get(session.programKey) ?? []), session]));
   const update = (session: CampaignSession, payload: Partial<CampaignSession>) =>
     void dispatch({ entity: { type: 'campaignSession', id: session.id }, op: 'update', payload, baseRevision: session.revision });
+  const remove = (session: CampaignSession) => {
+    if (!window.confirm(`Remove this ${PROGRAM_LABELS[session.programKey]} offering? Existing attendance history will remain recoverable.`)) return;
+    void dispatch({ entity: { type: 'campaignSession', id: session.id }, op: 'delete', payload: {}, baseRevision: session.revision }).then(() =>
+      showToast(`${PROGRAM_LABELS[session.programKey]} offering removed`, 'info'),
+    );
+  };
   const addOffering = () => {
     const requirementId = newId();
     void dispatch({
@@ -460,16 +598,26 @@ function ScheduleEditor({ snapshot, campaign, onCheckin }: { snapshot: TrackerSn
                       onBlur={(event) => event.target.value !== (session.venue ?? '') && update(session, { venue: event.target.value || null })}
                     />
                   </label>
-                  {CHECKIN_PROGRAMS.includes(program) && (
+                  <div className={styles.sessionActions}>
+                    {CHECKIN_PROGRAMS.includes(program) && (
+                      <button
+                        type="button"
+                        className={`pressable ${styles.checkinBtn}`}
+                        aria-label={`Check in ${PROGRAM_LABELS[program]} on ${session.dateStart}${session.startTime ? ` at ${session.startTime}` : ''}`}
+                        onClick={() => onCheckin(session)}
+                      >
+                        Check in
+                      </button>
+                    )}
                     <button
                       type="button"
-                      className={`pressable ${styles.checkinBtn}`}
-                      aria-label={`Check in ${PROGRAM_LABELS[program]} on ${session.dateStart}${session.startTime ? ` at ${session.startTime}` : ''}`}
-                      onClick={() => onCheckin(session)}
+                      className={styles.removeOffering}
+                      aria-label={`Remove ${PROGRAM_LABELS[program]} offering on ${session.dateStart}${session.startTime ? ` at ${session.startTime}` : ''}`}
+                      onClick={() => remove(session)}
                     >
-                      Check in
+                      Remove
                     </button>
-                  )}
+                  </div>
                 </div>
               ))}
             </section>
@@ -488,8 +636,12 @@ export default function CampaignPage({ params = [] }: { params?: string[] }) {
   const [query, setQuery] = useState('');
   const [groupFilter, setGroupFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState<'all' | MemberStatus>('all');
+  const [deadlineFilter, setDeadlineFilter] = useState<DeadlineFilter>('all');
+  const [queueAsOf, setQueueAsOf] = useState<string | null>(null);
+  const [attendanceWindow, setAttendanceWindow] = useState<AttendanceWindow | null>(null);
   const [openMemberId, setOpenMemberId] = useState<string | null>(null);
   const [checkinSessionId, setCheckinSessionId] = useState<string | null>(null);
+  const [checkinQuery, setCheckinQuery] = useState('');
   if (!snapshot) return null;
 
   const campaigns = notDeleted(snapshot.campaigns)
@@ -499,18 +651,21 @@ export default function CampaignPage({ params = [] }: { params?: string[] }) {
 
   const createCycle6 = async () => {
     const existing = campaigns.find((row) => row.name === CYCLE6_CAMPAIGN.name);
-    if (existing) {
-      setSelectedId(existing.id);
-      showToast('Cycle 6 is already available', 'info');
-      return;
+    const campaignId = existing?.id ?? newId();
+    if (!existing) {
+      await dispatch({ entity: { type: 'campaign', id: campaignId }, op: 'create', payload: CYCLE6_CAMPAIGN });
     }
-    const campaignId = newId();
-    await dispatch({ entity: { type: 'campaign', id: campaignId }, op: 'create', payload: CYCLE6_CAMPAIGN });
-    for (const session of CYCLE6_SESSION_TEMPLATES) {
+    const missingSessions = missingCycle6SessionTemplates(existing ? campaignSessionsFor(snapshot, campaignId) : []);
+    for (const session of missingSessions) {
       await dispatch({ entity: { type: 'campaignSession', id: newId() }, op: 'create', payload: { campaignId, ...session } });
     }
     setSelectedId(campaignId);
-    showToast('Official Cycle 6 schedule added — goals are ready for you to set', 'success');
+    showToast(
+      missingSessions.length > 0
+        ? `Official Cycle 6 schedule ready · ${missingSessions.length} offering${missingSessions.length === 1 ? '' : 's'} added`
+        : 'Cycle 6 already has every official offering',
+      missingSessions.length > 0 ? 'success' : 'info',
+    );
   };
 
   const addCampaign = async () => {
@@ -553,15 +708,18 @@ export default function CampaignPage({ params = [] }: { params?: string[] }) {
   }
 
   const sessions = campaignSessionsFor(snapshot, campaign.id);
+  const missingOfficialOfferings = campaign.name === CYCLE6_CAMPAIGN.name ? missingCycle6SessionTemplates(sessions).length : 0;
   const states = campaignQualifications(snapshot, campaign);
   const groups = notDeleted(snapshot.groups)
     .slice()
     .sort((a, b) => a.name.localeCompare(b.name));
   const metrics = metricsForCampaign(snapshot, campaign.id);
   const progress = stageProgress(snapshot, campaign.id);
+  const queueStates = queueAsOf ? campaignQualifications(snapshot, campaign, queueAsOf) : states;
   const q = query.trim().toLowerCase();
-  const visibleStates = states
-    .filter((state) => statusMatches(state, activeFilter, snapshot))
+  const visibleStates = queueStates
+    .filter((state) => statusMatches(state, activeFilter, snapshot, attendanceWindow))
+    .filter((state) => deadlineMatches(state.deadline, deadlineFilter, queueAsOf ?? todayISO()))
     .filter((state) => groupFilter === 'all' || state.member.groupId === groupFilter)
     .filter((state) => statusFilter === 'all' || state.member.status === statusFilter)
     .filter((state) => !q || state.member.name.toLowerCase().includes(q) || groupName(snapshot, state.member.groupId).toLowerCase().includes(q))
@@ -594,14 +752,52 @@ export default function CampaignPage({ params = [] }: { params?: string[] }) {
         payload: { campaignId: campaign.id, metricKey: stageKey, goal: patch.goal ?? null, actual: patch.actual ?? null, weekIndex: null },
       });
   };
-  const chooseFilter = (filter: QueueFilter, groupId = groupFilter) => {
-    setActiveFilter(filter);
-    setGroupFilter(groupId);
+  const scrollToQueue = () => {
     const queueElement = document.getElementById('campaign-action-queue');
     if (queueElement && typeof queueElement.scrollIntoView === 'function') queueElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
+  const chooseFilter = (filter: QueueFilter, groupId = groupFilter) => {
+    setActiveFilter(filter);
+    setGroupFilter(groupId);
+    setQueueAsOf(null);
+    setAttendanceWindow(null);
+    scrollToQueue();
+  };
+  const openExactQueue = (
+    filter: QueueFilter,
+    { groupId = 'all', asOf = null, window = null }: { groupId?: string; asOf?: string | null; window?: AttendanceWindow | null } = {},
+  ) => {
+    setActiveFilter(filter);
+    setGroupFilter(groupId);
+    setStatusFilter('all');
+    setDeadlineFilter('all');
+    setQuery('');
+    setQueueAsOf(asOf);
+    setAttendanceWindow(window);
+    scrollToQueue();
+  };
   const openMember = openMemberId ? notDeleted(snapshot.members).find((member) => member.id === openMemberId) : undefined;
   const checkinSession = checkinSessionId ? sessions.find((session) => session.id === checkinSessionId) : undefined;
+  const reviewSource = (member: Member, source: 'life_group' | 'kgc' | 'light_up') => {
+    if (source === 'life_group') {
+      setCheckinSessionId(null);
+      navigate('/report');
+      showToast(`Open a dated Life Group report and check in ${member.name}`, 'info');
+      return;
+    }
+    const programKey = source === 'kgc' ? 'kgc' : 'light_up';
+    const candidates = sessions
+      .filter((session) => session.programKey === programKey && (!checkinSession || session.dateStart <= checkinSession.dateStart))
+      .sort((a, b) => b.dateStart.localeCompare(a.dateStart) || (b.startTime ?? '').localeCompare(a.startTime ?? ''));
+    const prerequisite = candidates[0] ?? sessions.find((session) => session.programKey === programKey);
+    if (!prerequisite) {
+      showToast(`Add a ${PROGRAM_LABELS[programKey]} offering before correcting this source record`, 'error');
+      return;
+    }
+    setCheckinQuery(member.name);
+    setCheckinSessionId(prerequisite.id);
+    showToast(`Review ${member.name}'s ${PROGRAM_LABELS[programKey]} source check-in`, 'info');
+  };
 
   return (
     <section className={`view ${styles.page}`}>
@@ -639,11 +835,15 @@ export default function CampaignPage({ params = [] }: { params?: string[] }) {
               <input type="date" value={campaign.end} onChange={(event) => updateCampaign({ end: event.target.value })} />
             </label>
           </div>
-          {sessions.length === 0 && (
+          {(sessions.length === 0 || missingOfficialOfferings > 0) && (
             <div className={styles.templateCallout}>
-              <span>This cycle has no person-level schedule yet.</span>
+              <span>
+                {missingOfficialOfferings > 0
+                  ? `${missingOfficialOfferings} official offering${missingOfficialOfferings === 1 ? ' is' : 's are'} missing from this Cycle 6 schedule.`
+                  : 'This cycle has no person-level schedule yet.'}
+              </span>
               <button type="button" className={`pressable ${styles.secondaryBtn}`} onClick={() => void createCycle6()}>
-                Add official Cycle 6 instead
+                {missingOfficialOfferings > 0 ? 'Restore missing official offerings' : 'Add official Cycle 6 instead'}
               </button>
             </div>
           )}
@@ -655,47 +855,51 @@ export default function CampaignPage({ params = [] }: { params?: string[] }) {
             count={counts.kgcEligible}
             detail="2+ named LG · no KGC"
             active={activeFilter === 'kgc_eligible'}
-            onClick={() => chooseFilter('kgc_eligible')}
+            onClick={() => openExactQueue('kgc_eligible')}
           />
           <KpiCard
             label="1 LG away from KGC"
             count={counts.oneAway}
             detail="Invite back this week"
             active={activeFilter === 'one_lg_away'}
-            onClick={() => chooseFilter('one_lg_away')}
+            onClick={() => openExactQueue('one_lg_away')}
           />
           <KpiCard
             label="Light Up blocked by KGC"
             count={counts.blockedKgc}
             detail="3+ LG · KGC only blocker"
             active={activeFilter === 'blocked_by_kgc'}
-            onClick={() => chooseFilter('blocked_by_kgc')}
+            onClick={() => openExactQueue('blocked_by_kgc')}
           />
           <KpiCard
             label="Light Up ready"
             count={counts.lightReady}
             detail="3+ LG · KGC complete"
             active={activeFilter === 'light_up_ready'}
-            onClick={() => chooseFilter('light_up_ready')}
+            onClick={() => openExactQueue('light_up_ready')}
           />
           <KpiCard
             label="LIV incomplete"
             count={counts.livIncomplete}
             detail="Light Up complete · 0/2 or 1/2"
-            active={activeFilter === 'liv_one'}
-            onClick={() => chooseFilter('liv_one')}
+            active={activeFilter === 'liv_incomplete'}
+            onClick={() => openExactQueue('liv_incomplete')}
           />
           <KpiCard
             label="Water Baptism ready"
             count={counts.baptismReady}
             detail="Light Up complete · not baptized"
             active={activeFilter === 'baptism_ready'}
-            onClick={() => chooseFilter('baptism_ready')}
+            onClick={() => openExactQueue('baptism_ready')}
           />
         </div>
 
         <Timeline snapshot={snapshot} campaign={campaign} states={states} />
-        <WeeklyProgress snapshot={snapshot} campaign={campaign} />
+        <WeeklyProgress
+          snapshot={snapshot}
+          campaign={campaign}
+          onInspect={(filter, window) => openExactQueue(filter, { asOf: window.end, window: filter === 'week_named_lg' ? window : null })}
+        />
 
         <div className={styles.twoColumn}>
           <Card id="campaign-action-queue" className={styles.queueCard}>
@@ -705,7 +909,22 @@ export default function CampaignPage({ params = [] }: { params?: string[] }) {
                 <h2 className={styles.cardTitle}>{FILTERS.find((filter) => filter.key === activeFilter)?.label}</h2>
                 <p className={styles.cardHint}>Name → status → blocker → next action → deadline</p>
               </div>
-              <span className={styles.resultCount}>{visibleStates.length} people</span>
+              <div className={styles.queueSummary}>
+                {queueAsOf && (
+                  <button
+                    type="button"
+                    className={styles.historyBadge}
+                    onClick={() => {
+                      setQueueAsOf(null);
+                      setAttendanceWindow(null);
+                    }}
+                    aria-label={`Clear historical view as of ${formatDate(queueAsOf)}`}
+                  >
+                    As of {formatDate(queueAsOf, { month: 'short', day: 'numeric' })} ×
+                  </button>
+                )}
+                <span className={styles.resultCount}>{visibleStates.length} people</span>
+              </div>
             </div>
             <div className={styles.filterChips} role="group" aria-label="Quick filters">
               {FILTERS.filter((filter) => QUICK_FILTER_KEYS.includes(filter.key)).map((filter) => (
@@ -743,6 +962,15 @@ export default function CampaignPage({ params = [] }: { params?: string[] }) {
                   <option value="vip">VIP</option>
                   <option value="regular">Regular</option>
                   <option value="leader">Leader</option>
+                </select>
+              </label>
+              <label>
+                <span className="visually-hidden">Filter by deadline urgency</span>
+                <select value={deadlineFilter} onChange={(event) => setDeadlineFilter(event.target.value as DeadlineFilter)}>
+                  <option value="all">All deadlines</option>
+                  <option value="next_7_days">Due next 7 days</option>
+                  <option value="overdue">Overdue</option>
+                  <option value="no_date">No scheduled date</option>
                 </select>
               </label>
             </div>
@@ -785,13 +1013,21 @@ export default function CampaignPage({ params = [] }: { params?: string[] }) {
             <div className={styles.goalList}>
               {progress.map((row) => {
                 const derived = derivedCampaignActual(snapshot, campaign.id, row.stage.key) != null;
+                const stageFilter = derived ? filterForStage(row.stage.key) : null;
                 const actualInputId = `campaign-${campaign.id}-${row.stage.key}-actual`;
                 const goalInputId = `campaign-${campaign.id}-${row.stage.key}-goal`;
                 return (
                   <div key={row.stage.id} className={styles.goalRow}>
                     <div className={styles.goalTop}>
                       <strong>{row.stage.label}</strong>
-                      <span>{derived ? 'Derived' : 'Manual / legacy'}</span>
+                      <span className={styles.goalMeta}>
+                        {derived ? 'Derived' : 'Manual / legacy'}
+                        {stageFilter && (
+                          <button type="button" onClick={() => openExactQueue(stageFilter)}>
+                            View people
+                          </button>
+                        )}
+                      </span>
                     </div>
                     <div className={styles.goalInputs}>
                       {derived ? (
@@ -862,7 +1098,7 @@ export default function CampaignPage({ params = [] }: { params?: string[] }) {
                   const rows = states.filter((state) => state.member.groupId === group.id);
                   const cell = (label: string, value: number, filter: QueueFilter) => (
                     <td>
-                      <button type="button" aria-label={`${group.name}: ${label} ${value}`} onClick={() => chooseFilter(filter, group.id)}>
+                      <button type="button" aria-label={`${group.name}: ${label} ${value}`} onClick={() => openExactQueue(filter, { groupId: group.id })}>
                         {value}
                       </button>
                     </td>
@@ -889,7 +1125,14 @@ export default function CampaignPage({ params = [] }: { params?: string[] }) {
           </div>
         </Card>
 
-        <ScheduleEditor snapshot={snapshot} campaign={campaign} onCheckin={(session) => setCheckinSessionId(session.id)} />
+        <ScheduleEditor
+          snapshot={snapshot}
+          campaign={campaign}
+          onCheckin={(session) => {
+            setCheckinQuery('');
+            setCheckinSessionId(session.id);
+          }}
+        />
 
         <Card className={styles.fullWidth}>
           <details>
@@ -915,15 +1158,18 @@ export default function CampaignPage({ params = [] }: { params?: string[] }) {
             </div>
           </details>
         </Card>
-
-        <div className={styles.mobileQueueCta}>
-          <button type="button" className={`pressable ${styles.primaryBtn}`} onClick={() => navigate('/campaign/all')}>
-            Open Action Queue
-          </button>
-        </div>
       </div>
       {openMember && <MemberDialog member={openMember} onClose={() => setOpenMemberId(null)} />}
-      {checkinSession && <SessionCheckinDialog campaign={campaign} session={checkinSession} onClose={() => setCheckinSessionId(null)} />}
+      {checkinSession && (
+        <SessionCheckinDialog
+          key={`${checkinSession.id}:${checkinQuery}`}
+          campaign={campaign}
+          session={checkinSession}
+          initialQuery={checkinQuery}
+          onClose={() => setCheckinSessionId(null)}
+          onReviewSource={reviewSource}
+        />
+      )}
     </section>
   );
 }

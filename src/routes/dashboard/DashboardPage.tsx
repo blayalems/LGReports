@@ -180,7 +180,7 @@ export default function DashboardPage() {
           <Card className={styles.cycleFocus}>
             <div className={styles.cardHead}>
               <div>
-                <h2 className={styles.cardTitle}>{campaign ? 'Cycle 6 Focus' : 'Campaign focus'}</h2>
+                <h2 className={styles.cardTitle}>Campaign focus</h2>
                 {campaign && (
                   <p className={styles.focusNext}>
                     {nextCampaignSession

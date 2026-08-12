@@ -3,7 +3,7 @@ import { createEmptySnapshot } from './demoData';
 import { CYCLE6_CAMPAIGN, CYCLE6_SESSION_TEMPLATES } from './campaignCycle6';
 import { revisioned } from './factory';
 import { parseISODate } from './dateUtils';
-import { activeCampaign, campaignQualification, canAttendCampaignSession, campaignWeeks, upcomingEvents } from './selectors';
+import { activeCampaign, campaignQualification, canAttendCampaignSession, campaignWeeks, derivedCampaignActual, upcomingEvents } from './selectors';
 import type { AttendanceEvent, CampaignAttendanceEvent, Member, TrackerSnapshot } from './types';
 
 describe('upcomingEvents', () => {
@@ -80,6 +80,17 @@ describe('activeCampaign', () => {
     ];
 
     expect(activeCampaign(snapshot, new Date('2026-11-08T00:00:00+08:00'))?.id).toBe('cycle6');
+  });
+
+  it('surfaces a scheduled upcoming campaign when its first activity is within 30 days', () => {
+    const snapshot = createEmptySnapshot('test');
+    const metadata = revisioned('test', '2026-08-13T00:00:00.000Z');
+    snapshot.campaigns = [
+      { id: 'legacy', name: 'Legacy active cycle', start: '2026-08-01', end: '2026-12-01', ...metadata },
+      { id: 'cycle6', ...CYCLE6_CAMPAIGN, ...metadata },
+    ];
+    snapshot.campaignSessions = [{ id: 'pray', campaignId: 'cycle6', ...CYCLE6_SESSION_TEMPLATES[0], ...metadata }];
+    expect(activeCampaign(snapshot, new Date('2026-08-13T09:00:00+08:00'))?.id).toBe('cycle6');
   });
 });
 
@@ -298,5 +309,41 @@ describe('Cycle 6 qualification rules', () => {
     fixture.addLg('2026-10-01');
     const firstKgc = fixture.snapshot.campaignSessions.find((session) => session.programKey === 'kgc' && session.dateStart === '2026-09-27')!;
     expect(canAttendCampaignSession(fixture.snapshot, fixture.snapshot.campaigns[0], firstKgc, fixture.member).allowed).toBe(false);
+  });
+
+  it('retains the missed final milestone date so overdue follow-up remains filterable', () => {
+    const fixture = cycleFixture();
+    fixture.addLg('2026-09-01');
+    fixture.addLg('2026-09-08');
+    expect(campaignQualification(fixture.snapshot, fixture.snapshot.campaigns[0], fixture.member, '2026-11-08')).toMatchObject({
+      actionKey: 'kgc_eligible',
+      deadline: '2026-10-04',
+    });
+  });
+
+  it('does not infer a historical attendance date from an undated weekly report', () => {
+    const fixture = cycleFixture();
+    fixture.addLg('2026-09-01');
+    fixture.snapshot.meetings[0].date = '';
+    expect(campaignQualification(fixture.snapshot, fixture.snapshot.campaigns[0], fixture.member, '2026-09-02')).toMatchObject({
+      lifeGroupAttendanceCount: 0,
+      kgcEligible: false,
+    });
+  });
+
+  it('counts distinct named Life Group meetings even when they occur on the same date', () => {
+    const fixture = cycleFixture();
+    fixture.addLg('2026-09-01');
+    fixture.addLg('2026-09-01');
+    expect(campaignQualification(fixture.snapshot, fixture.snapshot.campaigns[0], fixture.member, '2026-09-02')).toMatchObject({
+      lifeGroupAttendanceCount: 2,
+      kgcEligible: true,
+    });
+  });
+
+  it('uses legacy manual actuals when every person-level campaign session is deleted', () => {
+    const fixture = cycleFixture();
+    fixture.snapshot.campaignSessions = fixture.snapshot.campaignSessions.map((session) => ({ ...session, deletedAt: '2026-08-02T00:00:00.000Z' }));
+    expect(derivedCampaignActual(fixture.snapshot, fixture.snapshot.campaigns[0].id, 'kg')).toBeNull();
   });
 });
